@@ -1,0 +1,500 @@
+﻿<?xml version="1.0"?>
+<ACAML xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" schemaversion="2.1.30.999" xmlns="urn:schemas-agilent-com:acaml21">
+	<Checksum Algorithm="MD5">
+		<Value>v3akXGrGtHDYaVeMMBnl+w==</Value>
+	</Checksum>
+  <MigrationHistory>
+    <MigrationStep>
+      <FromNamespace>urn:schemas-agilent-com:acaml15</FromNamespace>
+      <ToNamespace>urn:schemas-agilent-com:acaml21</ToNamespace>
+      <Date>2026-10-20T12:05:24.7990968+02:00</Date>
+      <Application>Agilent.Acaml.Core, Assembly Version: 1.0.0.0, File Version: 2.1.46.1</Application>
+    </MigrationStep>
+    <MigrationStep>
+      <FromNamespace>urn:schemas-agilent-com:acaml21</FromNamespace>
+      <ToNamespace>urn:schemas-agilent-com:acaml21v2.1.30.999</ToNamespace>
+      <Date>2026-10-20T12:05:24.8016117+02:00</Date>
+      <Application>Agilent.Acaml.Core, Assembly Version: 1.0.0.0, File Version: 2.1.46.1</Application>
+    </MigrationStep>
+  </MigrationHistory>
+  <Doc>
+    <DocID>9526e7e2-934a-4535-997d-5af2f2f49390</DocID>
+    <DocInfo>
+      <Description>ACAML Export</Description>
+      <CreatedByUser>ITQLABEMB633\ITQ</CreatedByUser>
+      <CreatedByApplication>
+        <AgilentApp>
+          <Name>IntelligentDataAnalysis</Name>
+          <Version>Version 2.7 - Build 2.207.10.224</Version>
+        </AgilentApp>
+      </CreatedByApplication>
+      <CreationDate>2026-10-19T22:50:10.203+02:00</CreationDate>
+      <ClientName>ITQLABEMB633</ClientName>
+      <CustomField Name="OriginalApplicationName">
+        <Value>ChemStation</Value>
+      </CustomField>
+      <CustomField Name="InjectionMetaDataItems">
+        <Xml>
+          <ArrayOfInjectionMetaData xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="">
+            <InjectionMetaData AcqMethodName="MPZ_CO-Hydro_260713_250C-40min.M" DaMethodName="MPZ_method-2.2" Barcode="" InjectionAcqDateTime="2026-10-19T20:10:05Z" InjectionId="11a0b9b8-f012-4b40-a3b8-d0595ebb7326" InjectorPosition="Front" InstrumentName="GC 8860" LastModifiedDateTime="2026-10-20T14:00:56.2095378+02:00" BracketingType="Undefined" RawDataFileName="MPZHY14_reaction_261015--123F.D" SampleDescription="" SampleName="MPZHY14_reaction_261015_123" SampleSetupId="c81481c4-b8aa-4114-ae6d-9322e829f463" SampleType="Sample" SequenceName="MPZ_HY14-261015_reaction 2026-10-15 13-47-02" VialNumber="8">
+              <Dil>1;-1;-1;-1;-1</Dil>
+              <LimsIds key="" />
+              <LimsIds key="" />
+              <LimsIds key="" />
+              <Locked>false</Locked>
+              <Mult>1;-1;-1;-1;-1</Mult>
+              <ReplicateNumber val="1" />
+              <SampleAmount val="0" />
+              <SampleInjectionsCount val="1" />
+              <SampleOrderNumber val="123" />
+            </InjectionMetaData>
+          </ArrayOfInjectionMetaData>
+        </Xml>
+      </CustomField>
+    </DocInfo>
+    <Content>
+      <Resources>
+        <Instrument id="af36edf4-dc94-4e95-aa8d-8b4cbf66469d" ver="0">
+          <ComplexCustomFields />
+          <Name>GC 8860</Name>
+          <Technique>GasChromatography</Technique>
+          <Module id="457fa8fc-188c-459d-9c76-6fc4c6e7622c">
+            <Name>Agilent 8860</Name>
+            <Type>GC</Type>
+            <PartNo>8860</PartNo>
+            <SerialNo>CN2015C041</SerialNo>
+            <FirmwareRevision>2.6.0.306</FirmwareRevision>
+          </Module>
+        </Instrument>
+        <SeparationMedium id="76b3430b-84f8-4c70-961a-f38fefb370e5" ver="0">
+          <ComplexCustomFields />
+          <Name>DB-1</Name>
+          <Type>
+            <Column>
+              <SerialNo>autoID-3</SerialNo>
+              <ProdNo>123-1064</ProdNo>
+              <BatchNo>Agilent</BatchNo>
+              <DeadVolume val="4.15557768978142" unit="min" />
+              <Diameter val="320" unit="µm" />
+              <Length val="60" unit="m" />
+              <ParticleSize val="3" unit="µm" />
+              <MaxTemp val="280" unit="°C" />
+              <MaxPH val="2" />
+              <VoidTime val="4.15557768978142" unit="min" />
+            </Column>
+          </Type>
+        </SeparationMedium>
+        <SeparationMedium id="125a4134-c039-4eb9-aabf-d309f1265c62" ver="0">
+          <ComplexCustomFields />
+          <Name>-</Name>
+          <Type>
+            <Column>
+              <SerialNo>autoID-4</SerialNo>
+              <ProdNo />
+              <BatchNo>Agilent</BatchNo>
+              <DeadVolume val="0.556967815204166" unit="min" />
+              <Diameter val="320" unit="µm" />
+              <Length val="30" unit="m" />
+              <ParticleSize val="10" unit="µm" />
+              <MaxTemp val="270" unit="°C" />
+              <MaxPH val="2" />
+              <VoidTime val="0.556967815204166" unit="min" />
+            </Column>
+          </Type>
+        </SeparationMedium>
+        <SeparationMedium id="a7bb85c4-5a2d-46c0-86ee-64acb5005f20" ver="0">
+          <ComplexCustomFields />
+          <Name>25% SP-2100</Name>
+          <Type>
+            <Column>
+              <SerialNo>autoID-5</SerialNo>
+              <ProdNo>G3591-80007</ProdNo>
+              <BatchNo>Agilent</BatchNo>
+              <DeadVolume val="0" unit="min" />
+              <MaxTemp val="281" unit="°C" />
+              <MaxPH val="2" />
+              <VoidTime val="0" unit="min" />
+            </Column>
+          </Type>
+        </SeparationMedium>
+      </Resources>
+      <Method id="b826d0c6-1aa2-4775-a2aa-8a3248dc2057" ver="0">
+        <Info>
+          <LastModifiedBy>
+            <Username />
+          </LastModifiedBy>
+          <LastModifiedDate>2026-07-13T10:41:09Z</LastModifiedDate>
+          <AuditTrail />
+        </Info>
+        <ComplexCustomFields />
+        <BinaryData>
+          <DirItem>
+            <Name>MPZ_CO-Hydro_260713_250C-40min.M</Name>
+            <OriginalFilePath>C:\Users\Public\Documents\ChemStation\2\Data\MPZ_HY14-261015_reaction 2026-10-15 13-47-02\MPZ_CO-Hydro_260713_250C-40min.M</OriginalFilePath>
+            <DataItem>
+              <Name>acq_damethod.reg</Name>
+              <Data>
+                <DataFileReference>
+                  <Path>C:\Users\Public\Documents\ChemStation\2\Data\MPZ_HY14-261015_reaction 2026-10-15 13-47-02\MPZHY14_reaction_261015--123F.D\acq_damethod.reg</Path>
+                </DataFileReference>
+              </Data>
+            </DataItem>
+          </DirItem>
+        </BinaryData>
+        <Name>MPZ_CO-Hydro_260713_250C-40min.M</Name>
+        <QuantitationMethod>Area%</QuantitationMethod>
+        <Integrator>Agilent, TwelveTone</Integrator>
+        <MethodConfigurationLink>
+          <ExternalMethodConfiguration_ID id="b9bcb0d7-e116-4dd5-8a4e-88cae0d6ed52" ver="0" path="acq.macaml" />
+        </MethodConfigurationLink>
+      </Method>
+      <SampleContexts>
+        <Setup id="39d1c94f-c306-4408-9747-ee3d08310c92" ver="0">
+          <Info>
+            <CreatedBy>
+              <Username>SYSTEM</Username>
+            </CreatedBy>
+            <CreatedDate>2026-10-15T11:47:05Z</CreatedDate>
+            <LastModifiedBy>
+              <Username>SYSTEM</Username>
+            </LastModifiedBy>
+            <LastModifiedDate>2026-10-15T08:40:44Z</LastModifiedDate>
+          </Info>
+          <ComplexCustomFields>
+            <CustomField Name="OriginalPackagingMode" Description="Used to store original packaging mode before changing it by automatic ACAML fix. Required for iDA unattended processing.">
+              <Value>FullResultSet</Value>
+            </CustomField>
+            <CustomField Name="ChemStationMissingInjectionsRecovered">
+              <Value>0</Value>
+            </CustomField>
+            <CustomField Name="ChemStationSignalsRecovered">
+              <Value>0</Value>
+            </CustomField>
+            <CustomField Name="CalibrationGroupsAreCorrect">
+              <Value>true</Value>
+            </CustomField>
+          </ComplexCustomFields>
+          <IdentParam>
+            <Name>MPZ_HY14-261015_reaction 2026-10-15 13-47-02</Name>
+            <Description />
+            <ContextInfo>
+              <ContentType>SingleSample</ContentType>
+              <SourceType>Undefined</SourceType>
+              <ContentIntegrity>Undefined</ContentIntegrity>
+            </ContextInfo>
+          </IdentParam>
+          <AcqParam>
+            <Instrument_ID id="af36edf4-dc94-4e95-aa8d-8b4cbf66469d" ver="0" />
+          </AcqParam>
+          <DAParam>
+            <BracketingMode>None</BracketingMode>
+          </DAParam>
+          <SampleSetup_ID id="c81481c4-b8aa-4114-ae6d-9322e829f463" ver="0" />
+          <PackagingMode>Undefined</PackagingMode>
+        </Setup>
+        <MeasData id="b568f2d1-f625-4a77-b243-aa164244ff37" ver="0">
+          <Info>
+            <CreatedBy>
+              <Username>SYSTEM</Username>
+            </CreatedBy>
+            <CreatedDate>2026-10-15T11:47:05Z</CreatedDate>
+            <LastModifiedBy>
+              <Username>SYSTEM</Username>
+            </LastModifiedBy>
+            <LastModifiedDate>2026-10-15T08:40:44Z</LastModifiedDate>
+          </Info>
+          <SampleSetupContext_ID id="39d1c94f-c306-4408-9747-ee3d08310c92" ver="0" />
+          <IdentParam>
+            <Name>MPZ_HY14-261015_reaction 2026-10-15 13-47-02</Name>
+            <Description />
+            <ContextInfo>
+              <ContentType>Sequence</ContentType>
+              <SourceType>Undefined</SourceType>
+              <ContentIntegrity>Undefined</ContentIntegrity>
+            </ContextInfo>
+          </IdentParam>
+          <AcqParam>
+            <Instrument_ID id="af36edf4-dc94-4e95-aa8d-8b4cbf66469d" ver="0" />
+          </AcqParam>
+          <SampleMeasData_ID id="d08a2c8c-eda4-4d81-bcd6-5aaa34c72ccb" ver="0" />
+          <DiagnosticData />
+        </MeasData>
+      </SampleContexts>
+      <Samples>
+        <Setup id="c81481c4-b8aa-4114-ae6d-9322e829f463" ver="0">
+          <ComplexCustomFields />
+          <IdentParam>
+            <Name>MPZHY14_reaction_261015_123</Name>
+            <Description />
+            <LimsID key="" />
+            <LimsID key="" />
+            <LimsID key="" />
+            <Barcode />
+          </IdentParam>
+          <AcqParam>
+            <OrderNo val="123" />
+            <VialNumber>8</VialNumber>
+            <NumberOfInjections val="1" />
+            <InjectionVolume val="250" />
+            <InjectorPosition>Front</InjectorPosition>
+            <InjectionSource>StandardInjection</InjectionSource>
+          </AcqParam>
+          <DAParam>
+            <Type>Sample</Type>
+            <OrderNo val="123" />
+            <SampleAmount val="0" />
+            <DilutionFactor>
+              <CorrectionFactor val="1" />
+            </DilutionFactor>
+            <DilutionFactor>
+              <CorrectionFactor val="-1" />
+            </DilutionFactor>
+            <DilutionFactor>
+              <CorrectionFactor val="-1" />
+            </DilutionFactor>
+            <DilutionFactor>
+              <CorrectionFactor val="-1" />
+            </DilutionFactor>
+            <DilutionFactor>
+              <CorrectionFactor val="-1" />
+            </DilutionFactor>
+            <Multiplier>
+              <CorrectionFactor val="1" />
+            </Multiplier>
+            <Multiplier>
+              <CorrectionFactor val="-1" />
+            </Multiplier>
+            <Multiplier>
+              <CorrectionFactor val="-1" />
+            </Multiplier>
+            <Multiplier>
+              <CorrectionFactor val="-1" />
+            </Multiplier>
+            <Multiplier>
+              <CorrectionFactor val="-1" />
+            </Multiplier>
+          </DAParam>
+        </Setup>
+        <MeasData id="d08a2c8c-eda4-4d81-bcd6-5aaa34c72ccb" ver="0">
+          <Info>
+            <CreatedBy>
+              <Username>SYSTEM</Username>
+            </CreatedBy>
+            <CreatedDate>2026-10-19T20:10:05Z</CreatedDate>
+            <AuditTrail />
+          </Info>
+          <ComplexCustomFields />
+          <IdentParam>
+            <Name>MPZHY14_reaction_261015_123</Name>
+            <Description />
+            <LimsID key="" />
+            <LimsID key="" />
+            <LimsID key="" />
+            <Barcode />
+          </IdentParam>
+          <AcqParam>
+            <OrderNo val="123" />
+            <VialNumber>8</VialNumber>
+            <NumberOfInjections val="1" />
+            <InjectionVolume val="250" />
+            <InjectorPosition>Front</InjectorPosition>
+            <InjectionSource>StandardInjection</InjectionSource>
+          </AcqParam>
+          <SampleSetup_ID id="c81481c4-b8aa-4114-ae6d-9322e829f463" ver="0" />
+          <InjectionMeasData_ID id="11a0b9b8-f012-4b40-a3b8-d0595ebb7326" ver="0" />
+          <DiagnosticData />
+        </MeasData>
+      </Samples>
+      <Injections>
+        <MeasData id="11a0b9b8-f012-4b40-a3b8-d0595ebb7326" ver="0">
+          <Info>
+            <CreatedBy>
+              <Username>SYSTEM</Username>
+            </CreatedBy>
+            <CreatedDate>2026-10-19T20:10:05Z</CreatedDate>
+            <LastModifiedBy>
+              <Username>SYSTEM (SYSTEM)</Username>
+            </LastModifiedBy>
+            <LastModifiedDate>2026-10-20T14:00:56.2095378+02:00</LastModifiedDate>
+          </Info>
+          <BinaryData>
+            <DirItem>
+              <Name>MPZHY14_reaction_261015--123F.D</Name>
+              <OriginalFilePath>C:\CDSProjects\MPZ\Results\MPZ_HY14\MPZ_HY14-261015_reaction 2026-10-15 13-47-02\MPZHY14_reaction_261015--123F.D</OriginalFilePath>
+              <DataItem>
+                <Name>acq.txt</Name>
+                <Data>
+                  <DataFileReference>
+                    <Path>acq.txt</Path>
+                  </DataFileReference>
+                </Data>
+              </DataItem>
+              <DataItem>
+                <Name>ACQRES.REG</Name>
+                <Data>
+                  <DataFileReference>
+                    <Path>ACQRES.REG</Path>
+                  </DataFileReference>
+                </Data>
+              </DataItem>
+              <DataItem>
+                <Name>acq_damethod.reg</Name>
+                <Data>
+                  <DataFileReference>
+                    <Path>acq_damethod.reg</Path>
+                  </DataFileReference>
+                </Data>
+              </DataItem>
+              <DataItem>
+                <Name>acq_MethHist.txt</Name>
+                <Data>
+                  <DataFileReference>
+                    <Path>acq_MethHist.txt</Path>
+                  </DataFileReference>
+                </Data>
+              </DataItem>
+              <DataItem>
+                <Name>FID1A.ch</Name>
+                <Data>
+                  <DataFileReference>
+                    <Path>FID1A.ch</Path>
+                  </DataFileReference>
+                </Data>
+              </DataItem>
+              <DataItem>
+                <Name>Limsinf.xml</Name>
+                <Data>
+                  <DataFileReference>
+                    <Path>Limsinf.xml</Path>
+                  </DataFileReference>
+                </Data>
+              </DataItem>
+              <DataItem>
+                <Name>RUN.LOG</Name>
+                <Data>
+                  <DataFileReference>
+                    <Path>RUN.LOG</Path>
+                  </DataFileReference>
+                </Data>
+              </DataItem>
+              <DataItem>
+                <Name>SAMPLE.XML</Name>
+                <Data>
+                  <DataFileReference>
+                    <Path>SAMPLE.XML</Path>
+                  </DataFileReference>
+                </Data>
+              </DataItem>
+              <DataItem>
+                <Name>TCD2B.ch</Name>
+                <Data>
+                  <DataFileReference>
+                    <Path>TCD2B.ch</Path>
+                  </DataFileReference>
+                </Data>
+              </DataItem>
+            </DirItem>
+          </BinaryData>
+          <AcqParam>
+            <Method_ID id="b826d0c6-1aa2-4775-a2aa-8a3248dc2057" ver="0" />
+            <OrderNo val="1" />
+          </AcqParam>
+          <Signal id="48c6db84-8aa5-4d24-b2fd-7019507bb7a5" ver="0">
+            <Info>
+              <CreatedBy>
+                <Username>SYSTEM (SYSTEM)</Username>
+              </CreatedBy>
+              <CreatedDate>2026-10-20T12:06:01.0907619+02:00</CreatedDate>
+              <LastModifiedBy>
+                <Username>SYSTEM (SYSTEM)</Username>
+              </LastModifiedBy>
+              <LastModifiedDate>2026-10-20T14:00:55.8235567+02:00</LastModifiedDate>
+            </Info>
+            <ComplexCustomFields />
+            <BinaryData>
+              <DataItem>
+                <Name>FID1A.CH</Name>
+                <OriginalFilePath>MPZHY14_reaction_261015--123F.D\FID1A.CH</OriginalFilePath>
+                <Data>
+                  <DataFileReference>
+                    <Path>MPZHY14_reaction_261015--123F.D\FID1A.CH</Path>
+                  </DataFileReference>
+                </Data>
+              </DataItem>
+            </BinaryData>
+            <Name>FID1A</Name>
+            <Description>FID1 A, Front Signal</Description>
+            <Type>FID1</Type>
+            <BeginTime val="7.29999989271164E-06" />
+            <EndTime val="39.999675" />
+            <YAxisScalingFactor val="1" unit="Minutes" />
+            <TraceID />
+            <UserGenerated>false</UserGenerated>
+            <AutomationGenerated>false</AutomationGenerated>
+            <PeakDeletions />
+          </Signal>
+          <Signal id="e20de449-ac80-4506-8c92-ac5bf1f71e51" ver="0">
+            <Info>
+              <CreatedBy>
+                <Username>SYSTEM (SYSTEM)</Username>
+              </CreatedBy>
+              <CreatedDate>2026-10-20T12:06:01.0997603+02:00</CreatedDate>
+              <LastModifiedBy>
+                <Username>SYSTEM (SYSTEM)</Username>
+              </LastModifiedBy>
+              <LastModifiedDate>2026-10-20T14:00:55.8235567+02:00</LastModifiedDate>
+            </Info>
+            <ComplexCustomFields />
+            <BinaryData>
+              <DataItem>
+                <Name>TCD2B.CH</Name>
+                <OriginalFilePath>MPZHY14_reaction_261015--123F.D\TCD2B.CH</OriginalFilePath>
+                <Data>
+                  <DataFileReference>
+                    <Path>MPZHY14_reaction_261015--123F.D\TCD2B.CH</Path>
+                  </DataFileReference>
+                </Data>
+              </DataItem>
+            </BinaryData>
+            <Name>TCD2B</Name>
+            <Description>TCD2 B, Back Signal</Description>
+            <Type>TCD2</Type>
+            <BeginTime val="7.29999989271164E-06" />
+            <EndTime val="39.999675" />
+            <YAxisScalingFactor val="1" unit="Minutes" />
+            <TraceID />
+            <UserGenerated>false</UserGenerated>
+            <AutomationGenerated>false</AutomationGenerated>
+            <PeakDeletions />
+          </Signal>
+          <InjectionSeparationMedium>
+            <AutoDetect>false</AutoDetect>
+            <Position>Unknown</Position>
+            <InjectionCount val="0" />
+            <UsedForInjection>true</UsedForInjection>
+            <SeparationMedium_ID id="76b3430b-84f8-4c70-961a-f38fefb370e5" ver="0" />
+          </InjectionSeparationMedium>
+          <InjectionSeparationMedium>
+            <AutoDetect>false</AutoDetect>
+            <Position>Left</Position>
+            <InjectionCount val="0" />
+            <UsedForInjection>true</UsedForInjection>
+            <SeparationMedium_ID id="125a4134-c039-4eb9-aabf-d309f1265c62" ver="0" />
+          </InjectionSeparationMedium>
+          <InjectionSeparationMedium>
+            <AutoDetect>false</AutoDetect>
+            <Position>Right</Position>
+            <InjectionCount val="0" />
+            <UsedForInjection>true</UsedForInjection>
+            <SeparationMedium_ID id="a7bb85c4-5a2d-46c0-86ee-64acb5005f20" ver="0" />
+          </InjectionSeparationMedium>
+          <InjectionVolume val="249.999999999999" />
+          <DiagnosticData />
+          <AcquisitionSoftware>ChemStation Rev. C.01.10 [201] Copyright © Agilent Technologies</AcquisitionSoftware>
+          <ExternalResultPath>MPZHY14_reaction_261015--123F.rx</ExternalResultPath>
+        </MeasData>
+      </Injections>
+      <Actions />
+    </Content>
+  </Doc>
+</ACAML>

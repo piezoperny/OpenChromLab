@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Fileset IdentifierAlgorithm="" Identifier="" xmlns="urn:schemas-agilent-com:Fileset">
+  <Files>
+    <File Path="MPZHY14_reaction_261015--124F.rx" IdentifierAlgorithm="MD5" Identifier="fd3d1daf6ca4581067017f5b1731fdeb">
+      <Property Name="appVersion" Value="2026-1020-1202-09785" />
+    </File>
+    <File Path="sequence.acam_" IdentifierAlgorithm="MD5" Identifier="1af1d4890083103d5a69d336fcafb46c">
+      <Property Name="appVersion" Value="2026-1020-1202-09785" />
+    </File>
+    <File Path="MPZ_method-2.2.pmx" IdentifierAlgorithm="MD5" Identifier="8622b205d753ba476d114cc48009794d">
+      <Property Name="appVersion" Value="2026-1019-0948-56877" />
+    </File>
+  </Files>
+</Fileset>
