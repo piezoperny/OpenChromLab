@@ -1,0 +1,327 @@
+{
+  "name": "MPZ_method-2.2",
+  "source_path": "z:\\GRUPOS\\REACCION 5 PRIETO\\MPERNAZ\\[10] antigravity\\[01] agilent substitute\\MPZHY14_reaction_261015--126F.D\\MPZ_method-2.2.pmx",
+  "signals": {
+    "FID1A": {
+      "signal_name": "FID1A",
+      "slope_sensitivity": 1.0,
+      "peak_width": 0.02,
+      "area_reject": 1.0,
+      "height_reject": 1.7,
+      "shoulders_mode": "OFF",
+      "area_pct_reject": 0.0,
+      "timed_events": [
+        {
+          "time_min": 4.0,
+          "event_type": "IntegrationOn",
+          "value": "ON",
+          "enabled": true
+        },
+        {
+          "time_min": 12.0,
+          "event_type": "IntegrationOff",
+          "value": "OFF",
+          "enabled": true
+        },
+        {
+          "time_min": 15.0,
+          "event_type": "IntegrationOn",
+          "value": "ON",
+          "enabled": true
+        },
+        {
+          "time_min": 16.4,
+          "event_type": "IntegrationOff",
+          "value": "OFF",
+          "enabled": true
+        }
+      ],
+      "manual_method_events": []
+    },
+    "TCD2B": {
+      "signal_name": "TCD2B",
+      "slope_sensitivity": 1.0,
+      "peak_width": 0.02,
+      "area_reject": 1.0,
+      "height_reject": 1.7,
+      "shoulders_mode": "OFF",
+      "area_pct_reject": 0.0,
+      "timed_events": [
+        {
+          "time_min": 0.002,
+          "event_type": "BaselineNow",
+          "value": "true",
+          "enabled": true
+        },
+        {
+          "time_min": 1.0,
+          "event_type": "IntegrationOff",
+          "value": "OFF",
+          "enabled": true
+        },
+        {
+          "time_min": 4.9,
+          "event_type": "IntegrationOn",
+          "value": "ON",
+          "enabled": true
+        },
+        {
+          "time_min": 5.5,
+          "event_type": "IntegrationOff",
+          "value": "OFF",
+          "enabled": true
+        },
+        {
+          "time_min": 8.0,
+          "event_type": "IntegrationOn",
+          "value": "ON",
+          "enabled": true
+        },
+        {
+          "time_min": 8.1,
+          "event_type": "BaselineNow",
+          "value": "true",
+          "enabled": true
+        },
+        {
+          "time_min": 8.7,
+          "event_type": "BaselineNow",
+          "value": "true",
+          "enabled": true
+        },
+        {
+          "time_min": 9.3,
+          "event_type": "IntegrationOff",
+          "value": "OFF",
+          "enabled": true
+        },
+        {
+          "time_min": 13.0,
+          "event_type": "IntegrationOn",
+          "value": "ON",
+          "enabled": true
+        },
+        {
+          "time_min": 14.5,
+          "event_type": "IntegrationOff",
+          "value": "OFF",
+          "enabled": true
+        }
+      ],
+      "manual_method_events": [
+        {
+          "begin_min": 8.102322808538272,
+          "end_min": 8.725644592222018,
+          "baseline_start_y": 38.26272304792842,
+          "baseline_end_y": 38.20032027466413,
+          "is_negative": true,
+          "drop_lines": [],
+          "enabled": true
+        },
+        {
+          "begin_min": 13.42574520096894,
+          "end_min": 14.02249834668388,
+          "baseline_start_y": 38.874295671564866,
+          "baseline_end_y": 39.15045137889564,
+          "is_negative": false,
+          "drop_lines": [],
+          "enabled": true
+        }
+      ]
+    }
+  },
+  "compounds": [
+    {
+      "index": 1,
+      "name": "unknown #1",
+      "signal": "FID1A",
+      "exp_rt_min": 4.546,
+      "abs_window_min": 0.0,
+      "rel_window_pct": 1.0,
+      "rt_update": "Never",
+      "rt_update_factor_pct": 50.0,
+      "peak_match": "Closest",
+      "is_negative_peak": false
+    },
+    {
+      "index": 2,
+      "name": "CH4",
+      "signal": "FID1A",
+      "exp_rt_min": 4.613841666667042,
+      "abs_window_min": 0.0,
+      "rel_window_pct": 1.0,
+      "rt_update": "Never",
+      "rt_update_factor_pct": 50.0,
+      "peak_match": "Closest",
+      "is_negative_peak": false
+    },
+    {
+      "index": 3,
+      "name": "C2H4",
+      "signal": "FID1A",
+      "exp_rt_min": 4.821,
+      "abs_window_min": 0.0,
+      "rel_window_pct": 1.0,
+      "rt_update": "Never",
+      "rt_update_factor_pct": 50.0,
+      "peak_match": "Closest",
+      "is_negative_peak": false
+    },
+    {
+      "index": 4,
+      "name": "C2H6",
+      "signal": "FID1A",
+      "exp_rt_min": 4.941841666667444,
+      "abs_window_min": 0.0,
+      "rel_window_pct": 1.0,
+      "rt_update": "Never",
+      "rt_update_factor_pct": 50.0,
+      "peak_match": "Closest",
+      "is_negative_peak": false
+    },
+    {
+      "index": 5,
+      "name": "CO2",
+      "signal": "TCD2B",
+      "exp_rt_min": 5.18,
+      "abs_window_min": 0.1,
+      "rel_window_pct": 1.0,
+      "rt_update": "Never",
+      "rt_update_factor_pct": 50.0,
+      "peak_match": "Closest",
+      "is_negative_peak": false
+    },
+    {
+      "index": 6,
+      "name": "C3H6",
+      "signal": "FID1A",
+      "exp_rt_min": 5.62,
+      "abs_window_min": 0.01,
+      "rel_window_pct": 1.0,
+      "rt_update": "Never",
+      "rt_update_factor_pct": 50.0,
+      "peak_match": "Closest",
+      "is_negative_peak": false
+    },
+    {
+      "index": 7,
+      "name": "C3H8",
+      "signal": "FID1A",
+      "exp_rt_min": 5.694440340257818,
+      "abs_window_min": 0.0,
+      "rel_window_pct": 1.0,
+      "rt_update": "Never",
+      "rt_update_factor_pct": 50.0,
+      "peak_match": "Closest",
+      "is_negative_peak": false
+    },
+    {
+      "index": 8,
+      "name": "CH3OCH3",
+      "signal": "FID1A",
+      "exp_rt_min": 6.330911488395359,
+      "abs_window_min": 0.0,
+      "rel_window_pct": 1.0,
+      "rt_update": "Never",
+      "rt_update_factor_pct": 50.0,
+      "peak_match": "Closest",
+      "is_negative_peak": false
+    },
+    {
+      "index": 9,
+      "name": "CH3OH",
+      "signal": "FID1A",
+      "exp_rt_min": 6.892295583202023,
+      "abs_window_min": 0.0,
+      "rel_window_pct": 1.0,
+      "rt_update": "Never",
+      "rt_update_factor_pct": 50.0,
+      "peak_match": "Closest",
+      "is_negative_peak": false
+    },
+    {
+      "index": 10,
+      "name": "C4H10",
+      "signal": "FID1A",
+      "exp_rt_min": 7.916640112342331,
+      "abs_window_min": 0.0,
+      "rel_window_pct": 1.0,
+      "rt_update": "Never",
+      "rt_update_factor_pct": 50.0,
+      "peak_match": "Closest",
+      "is_negative_peak": false
+    },
+    {
+      "index": 11,
+      "name": "unknown #2",
+      "signal": "FID1A",
+      "exp_rt_min": 8.375,
+      "abs_window_min": 0.1,
+      "rel_window_pct": 1.0,
+      "rt_update": "Never",
+      "rt_update_factor_pct": 50.0,
+      "peak_match": "Closest",
+      "is_negative_peak": false
+    },
+    {
+      "index": 12,
+      "name": "H2",
+      "signal": "TCD2B",
+      "exp_rt_min": 8.415,
+      "abs_window_min": 0.225,
+      "rel_window_pct": 1.0,
+      "rt_update": "Never",
+      "rt_update_factor_pct": 50.0,
+      "peak_match": "Closest",
+      "is_negative_peak": true
+    },
+    {
+      "index": 13,
+      "name": "Argon",
+      "signal": "TCD2B",
+      "exp_rt_min": 8.85,
+      "abs_window_min": 0.225,
+      "rel_window_pct": 1.0,
+      "rt_update": "Never",
+      "rt_update_factor_pct": 50.0,
+      "peak_match": "Closest",
+      "is_negative_peak": false
+    },
+    {
+      "index": 14,
+      "name": "CH3CH2OH",
+      "signal": "FID1A",
+      "exp_rt_min": 9.608,
+      "abs_window_min": 0.5,
+      "rel_window_pct": 1.0,
+      "rt_update": "Never",
+      "rt_update_factor_pct": 50.0,
+      "peak_match": "Closest",
+      "is_negative_peak": false
+    },
+    {
+      "index": 15,
+      "name": "CO",
+      "signal": "TCD2B",
+      "exp_rt_min": 13.439,
+      "abs_window_min": 0.75,
+      "rel_window_pct": 1.0,
+      "rt_update": "Never",
+      "rt_update_factor_pct": 50.0,
+      "peak_match": "Closest",
+      "is_negative_peak": false
+    },
+    {
+      "index": 16,
+      "name": "CH3CH2CH2OH",
+      "signal": "FID1A",
+      "exp_rt_min": 15.38,
+      "abs_window_min": 0.7,
+      "rel_window_pct": 1.0,
+      "rt_update": "Never",
+      "rt_update_factor_pct": 50.0,
+      "peak_match": "Closest",
+      "is_negative_peak": false
+    }
+  ]
+}
