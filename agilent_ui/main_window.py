@@ -7,7 +7,7 @@ import copy
 import os
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from agilent_core.ch_reader import (
     InjectionData,
@@ -40,6 +40,95 @@ from agilent_core.method_model import (
 from agilent_ui.theme import ThemePalette, LIGHT_PALETTE, DARK_PALETTE
 from agilent_ui.method_editor import MethodEditorDialog
 from .chrom_canvas import DualChromatogramCanvas, HitType
+
+
+class PillToggleSwitch(tk.Canvas):
+    """Modern canvas-drawn rounded pill toggle switch bound to a tk.BooleanVar."""
+
+    def __init__(
+        self,
+        parent: tk.Widget,
+        variable: tk.BooleanVar,
+        command: Optional[Callable[[], None]] = None,
+        width: int = 34,
+        height: int = 18,
+        palette: ThemePalette = LIGHT_PALETTE,
+    ) -> None:
+        self.variable = variable
+        self.command = command
+        self.palette = palette
+        self._sw_width = int(width)
+        self._sw_height = int(height)
+        bg_parent = getattr(palette, "overlay_card_bg", palette.bg_frame)
+        super().__init__(
+            parent,
+            width=width,
+            height=height,
+            bg=bg_parent,
+            bd=0,
+            highlightthickness=0,
+            cursor="hand2",
+        )
+        self.bind("<Button-1>", self._on_click)
+        self._trace_id = self.variable.trace_add("write", self._on_var_changed)
+        self.draw()
+
+    def _on_click(self, event: Optional[tk.Event] = None) -> None:
+        self.variable.set(not bool(self.variable.get()))
+        if self.command:
+            self.command()
+
+    def _on_var_changed(self, *args: Any) -> None:
+        if self.winfo_exists():
+            self.draw()
+
+    def set_theme(self, palette: ThemePalette) -> None:
+        self.palette = palette
+        bg_parent = getattr(palette, "overlay_card_bg", palette.bg_frame)
+        self.configure(bg=bg_parent)
+        self.draw()
+
+    def draw(self) -> None:
+        self.delete("all")
+        is_on = bool(self.variable.get())
+        track_color = (
+            getattr(self.palette, "toggle_on_bg", "#3898EC")
+            if is_on
+            else getattr(self.palette, "toggle_off_bg", "#222630")
+        )
+        knob_color = (
+            getattr(self.palette, "toggle_knob_on", "#FFFFFF")
+            if is_on
+            else getattr(self.palette, "toggle_knob_off", "#94A3B8")
+        )
+        border_color = (
+            getattr(self.palette, "subbar_active_border", track_color)
+            if is_on
+            else getattr(self.palette, "panel_border", "#263040")
+        )
+        w, h = self._sw_width, self._sw_height
+        pad = 2
+        r = (h - 2 * pad) / 2.0
+        y0 = pad
+        y1 = h - pad
+        x0 = pad
+        x1 = w - pad
+
+        # Draw rounded pill track (left circle + center rect + right circle)
+        self.create_oval(x0, y0, x0 + 2 * r, y1, fill=track_color, outline=border_color, width=1, tags=("track",))
+        self.create_oval(x1 - 2 * r, y0, x1, y1, fill=track_color, outline=border_color, width=1, tags=("track",))
+        self.create_rectangle(x0 + r, y0, x1 - r, y1, fill=track_color, outline="", tags=("track",))
+        self.create_line(x0 + r, y0, x1 - r, y0, fill=border_color, width=1, tags=("track",))
+        self.create_line(x0 + r, y1, x1 - r, y1, fill=border_color, width=1, tags=("track",))
+
+        # Draw circular sliding knob
+        kr = max(3.0, r - 2.0)
+        cy = h / 2.0
+        cx = (x1 - r) if is_on else (x0 + r)
+        self.create_oval(
+            cx - kr, cy - kr, cx + kr, cy + kr,
+            fill=knob_color, outline="", tags=("knob",),
+        )
 
 
 class InjectionUndoManager:
@@ -125,6 +214,13 @@ class OpenChromLabApp(tk.Tk):
         # Automatically load any .D folders in the workspace directory
         self.after(80, lambda: self.load_directory(self.workspace_dir))
 
+    def iconbitmap(self, bitmap: Any = None, default: Any = None) -> Any:
+        """Cross-platform iconbitmap wrapper: loads Windows .ico natively on Windows and falls back gracefully on X11/Linux."""
+        try:
+            return super().iconbitmap(bitmap=bitmap, default=default)
+        except tk.TclError:
+            return ""
+
     # ------------------------------------------------------------------
     # Styling & Layout Construction
     # ------------------------------------------------------------------
@@ -144,138 +240,166 @@ class OpenChromLabApp(tk.Tk):
             row_height = max(26, f_height + 8)
         except Exception:
             row_height = 26
+        self._tree_row_height = row_height
 
-        style.configure("Treeview", font=("Segoe UI", 9), rowheight=row_height)
-        style.configure("Treeview.Heading", font=("Segoe UI", 9, "bold"))
-        style.configure("TNotebook.Tab", font=("Segoe UI", 9, "bold"), padding=(10, 4))
+        style.configure("Treeview", font=("Segoe UI", 9), rowheight=row_height, borderwidth=0, relief="flat")
+        style.configure("Treeview.Heading", font=("Segoe UI", 9, "bold"), relief="flat")
+        style.configure("TNotebook.Tab", font=("Segoe UI", 9, "bold"), padding=(12, 5))
         style.configure("Toolbar.TButton", font=("Segoe UI", 9), padding=(6, 3))
         style.configure("Accent.TButton", font=("Segoe UI", 9, "bold"), padding=(8, 4))
 
     def _build_menu(self) -> None:
-        menubar = tk.Menu(self)
+        self.menubar = tk.Menu(self, tearoff=0)
 
-        file_menu = tk.Menu(menubar, tearoff=0)
-        file_menu.add_command(label="Open .D Folder or Sequence Directory...", command=self._open_folder_dialog)
-        file_menu.add_separator()
-        file_menu.add_command(label="New Method (From Scratch)...", command=self._open_new_method_dialog)
-        file_menu.add_command(label="Method Editor / Edit Method...", command=self._open_method_editor_dialog)
-        file_menu.add_command(label="Import Method (.pmx or .json)...", command=self._import_method_dialog)
-        file_menu.add_command(label="Save Method as .json...", command=self._save_method_dialog)
-        file_menu.add_separator()
-        file_menu.add_command(
+        self.file_menu = tk.Menu(self.menubar, tearoff=0)
+        self.file_menu.add_command(label="Open .D Folder or Sequence Directory...", command=self._open_folder_dialog)
+        self.file_menu.add_separator()
+        self.file_menu.add_command(label="New Method (From Scratch)...", command=self._open_new_method_dialog)
+        self.file_menu.add_command(label="Method Editor / Edit Method...", command=self._open_method_editor_dialog)
+        self.file_menu.add_command(label="Import Method (.pmx or .json)...", command=self._import_method_dialog)
+        self.file_menu.add_command(label="Save Method as .json...", command=self._save_method_dialog)
+        self.file_menu.add_separator()
+        self.file_menu.add_command(
             label="Export All Injections to Single-Sheet Excel (.xlsx)...   Ctrl+E",
             command=self._export_excel_dialog,
         )
-        file_menu.add_separator()
-        file_menu.add_command(label="Exit", command=self.destroy)
-        menubar.add_cascade(label="File", menu=file_menu)
+        self.file_menu.add_separator()
+        self.file_menu.add_command(label="Exit", command=self.destroy)
+        self.menubar.add_cascade(label="File", menu=self.file_menu)
 
-        int_menu = tk.Menu(menubar, tearoff=0)
-        int_menu.add_command(label="Auto-Integrate Current Injection (12-Tone Engine)", command=self._reprocess_current_auto)
-        int_menu.add_command(label="Reload OpenLab .rx Ground Truth (Current Injection)", command=self._reprocess_current_rx)
-        int_menu.add_separator()
-        int_menu.add_command(label="Reprocess Entire Sequence (Auto Integrator)", command=lambda: self._reprocess_all(prefer_rx=False))
-        int_menu.add_command(label="Reprocess Entire Sequence (Prefer .rx + Manual)", command=lambda: self._reprocess_all(prefer_rx=True))
-        int_menu.add_separator()
-        int_menu.add_command(label="Save Manual Overrides for Current Injection   Ctrl+S", command=self._save_current_manual_overrides)
-        int_menu.add_command(label="Clear Saved Manual Overrides for Current Injection", command=self._clear_current_manual_overrides)
-        menubar.add_cascade(label="Integration", menu=int_menu)
+        self.int_menu = tk.Menu(self.menubar, tearoff=0)
+        self.int_menu.add_command(label="Auto-Integrate Current Injection (12-Tone Engine)", command=self._reprocess_current_auto)
+        self.int_menu.add_command(label="Reload OpenLab .rx Ground Truth (Current Injection)", command=self._reprocess_current_rx)
+        self.int_menu.add_separator()
+        self.int_menu.add_command(label="Reprocess Entire Sequence (Auto Integrator)", command=lambda: self._reprocess_all(prefer_rx=False))
+        self.int_menu.add_command(label="Reprocess Entire Sequence (Prefer .rx + Manual)", command=lambda: self._reprocess_all(prefer_rx=True))
+        self.int_menu.add_separator()
+        self.int_menu.add_command(label="Save Manual Overrides for Current Injection   Ctrl+S", command=self._save_current_manual_overrides)
+        self.int_menu.add_command(label="Clear Saved Manual Overrides for Current Injection", command=self._clear_current_manual_overrides)
+        self.menubar.add_cascade(label="Integration", menu=self.int_menu)
 
-        view_menu = tk.Menu(menubar, tearoff=0)
-        chan_menu = tk.Menu(view_menu, tearoff=0)
-        chan_menu.add_radiobutton(label="Both", variable=self.channel_view_var, value="both", command=self._on_channel_view_changed)
-        chan_menu.add_radiobutton(label="FID Only", variable=self.channel_view_var, value="FID1A", command=self._on_channel_view_changed)
-        chan_menu.add_radiobutton(label="TCD Only", variable=self.channel_view_var, value="TCD2B", command=self._on_channel_view_changed)
-        view_menu.add_cascade(label="Channel View", menu=chan_menu)
-        view_menu.add_separator()
-        view_menu.add_command(label="Toggle Dark/Light Theme", command=self._toggle_theme)
-        view_menu.add_command(label="Save Current Zoom View as Preset...", command=self._save_custom_zoom_preset)
-        view_menu.add_separator()
-        view_menu.add_command(label="Zoom Reaction Window (3.5 - 16.5 min)", command=lambda: self.chrom_canvas.zoom_active_region())
-        view_menu.add_command(label="Zoom Full Run (0 - 40 min)", command=lambda: self.chrom_canvas.zoom_full_range())
-        view_menu.add_command(label="Auto-Scale Visible Y Axes", command=lambda: self.chrom_canvas.autoscale_visible_y())
-        menubar.add_cascade(label="View", menu=view_menu)
+        self.view_menu = tk.Menu(self.menubar, tearoff=0)
+        self.chan_menu = tk.Menu(self.view_menu, tearoff=0)
+        self.chan_menu.add_radiobutton(label="Both", variable=self.channel_view_var, value="both", command=self._on_channel_view_changed)
+        self.chan_menu.add_radiobutton(label="FID Only", variable=self.channel_view_var, value="FID1A", command=self._on_channel_view_changed)
+        self.chan_menu.add_radiobutton(label="TCD Only", variable=self.channel_view_var, value="TCD2B", command=self._on_channel_view_changed)
+        self.view_menu.add_cascade(label="Channel View", menu=self.chan_menu)
+        self.view_menu.add_separator()
+        self.view_menu.add_command(label="Toggle Dark/Light Theme", command=self._toggle_theme)
+        self.view_menu.add_command(label="Save Current Zoom View as Preset...", command=self._save_custom_zoom_preset)
+        self.view_menu.add_separator()
+        self.view_menu.add_command(label="Zoom Reaction Window (3.5 - 16.5 min)", command=lambda: self.chrom_canvas.zoom_active_region())
+        self.view_menu.add_command(label="Zoom Full Run (0 - 40 min)", command=lambda: self.chrom_canvas.zoom_full_range())
+        self.view_menu.add_command(label="Auto-Scale Visible Y Axes", command=lambda: self.chrom_canvas.autoscale_visible_y())
+        self.menubar.add_cascade(label="View", menu=self.view_menu)
 
-        self.config(menu=menubar)
+        self.config(menu=self.menubar)
 
     def _build_top_toolbar(self) -> None:
-        bar = tk.Frame(self, bg="#1F3864", pady=5, padx=8)
-        bar.pack(side=tk.TOP, fill=tk.X)
+        self.topbar_frame = tk.Frame(
+            self,
+            bg="#1F3864",
+            pady=5,
+            padx=8,
+            bd=0,
+            highlightthickness=1,
+            highlightbackground="#B8C0CC",
+        )
+        self.topbar_frame.pack(side=tk.TOP, fill=tk.X)
 
-        # App Title & Method Badge (F19)
-        tk.Label(
-            bar,
+        # App Title & Method Badge (F19, F8)
+        self.lbl_app_title = tk.Label(
+            self.topbar_frame,
             text="OpenChromLab",
             font=("Segoe UI", 11, "bold"),
             fg="#FFFFFF",
             bg="#1F3864",
-        ).pack(side=tk.LEFT, padx=(2, 10))
+        )
+        self.lbl_app_title.pack(side=tk.LEFT, padx=(2, 10))
 
         self.lbl_method_badge = tk.Label(
-            bar,
-            text=f"Method: {self.method.name}",
+            self.topbar_frame,
+            text=f"Method: {self.method.name} ⚙",
             font=("Segoe UI", 9, "bold"),
             fg="#FFD700",
             bg="#2B4C7E",
             padx=8,
             pady=2,
+            bd=0,
+            highlightthickness=1,
+            highlightbackground="#3E65A0",
         )
         self.lbl_method_badge.pack(side=tk.LEFT, padx=4)
 
-        tk.Button(
-            bar,
+        self.btn_open_seq = tk.Button(
+            self.topbar_frame,
             text="📂 Open .D / Sequence",
             command=self._open_folder_dialog,
             font=("Segoe UI", 9, "bold"),
             bg="#FFFFFF",
             fg="#1F3864",
             relief=tk.FLAT,
+            bd=0,
+            highlightthickness=1,
+            highlightbackground="#C8D1E0",
             padx=8,
             pady=2,
-        ).pack(side=tk.LEFT, padx=4)
+        )
+        self.btn_open_seq.pack(side=tk.LEFT, padx=4)
 
-        tk.Button(
-            bar,
-            text="⚙ Method Editor",
+        self.btn_method_editor = tk.Button(
+            self.topbar_frame,
+            text="📝 Method Editor",
             command=self._open_method_editor_dialog,
             font=("Segoe UI", 9),
             bg="#E8EEF5",
             fg="#1F3864",
             relief=tk.FLAT,
+            bd=0,
+            highlightthickness=1,
+            highlightbackground="#C8D1E0",
             padx=8,
             pady=2,
-        ).pack(side=tk.LEFT, padx=4)
+        )
+        self.btn_method_editor.pack(side=tk.LEFT, padx=4)
 
-        tk.Button(
-            bar,
-            text="⚙ Import .pmx/.json",
+        self.btn_import_method = tk.Button(
+            self.topbar_frame,
+            text="⚙ Import .pmx/json",
             command=self._import_method_dialog,
             font=("Segoe UI", 9),
             bg="#E8EEF5",
             fg="#1F3864",
             relief=tk.FLAT,
+            bd=0,
+            highlightthickness=1,
+            highlightbackground="#C8D1E0",
             padx=8,
             pady=2,
-        ).pack(side=tk.LEFT, padx=4)
+        )
+        self.btn_import_method.pack(side=tk.LEFT, padx=4)
 
         # Theme Toggle Button (F23)
         self.btn_theme_toggle = tk.Button(
-            bar,
+            self.topbar_frame,
             text="🌙 Dark Mode",
             command=self._toggle_theme,
             font=("Segoe UI", 9, "bold"),
             bg="#2B4C7E",
             fg="#FFFFFF",
             relief=tk.FLAT,
+            bd=0,
+            highlightthickness=1,
+            highlightbackground="#3E65A0",
             padx=8,
             pady=2,
         )
         self.btn_theme_toggle.pack(side=tk.RIGHT, padx=4)
 
         # Right side: Single-Sheet Excel Export & Copy buttons
-        tk.Button(
-            bar,
-            text="📊 Export Single-Sheet Excel (.xlsx)",
+        self.btn_export_excel = tk.Button(
+            self.topbar_frame,
+            text="📊 Export Excel",
             command=self._export_excel_dialog,
             font=("Segoe UI", 9, "bold"),
             bg="#107C41",
@@ -283,38 +407,65 @@ class OpenChromLabApp(tk.Tk):
             activebackground="#0B5C2E",
             activeforeground="#FFFFFF",
             relief=tk.FLAT,
+            bd=0,
+            highlightthickness=1,
+            highlightbackground="#0B5C2E",
             padx=10,
             pady=3,
-        ).pack(side=tk.RIGHT, padx=4)
+        )
+        self.btn_export_excel.pack(side=tk.RIGHT, padx=4)
 
-        tk.Button(
-            bar,
+        self.btn_copy_matrix = tk.Button(
+            self.topbar_frame,
             text="📋 Copy Matrix",
             command=self._copy_matrix_to_clipboard,
             font=("Segoe UI", 9),
             bg="#2B4C7E",
             fg="#FFFFFF",
             relief=tk.FLAT,
+            bd=0,
+            highlightthickness=1,
+            highlightbackground="#3E65A0",
             padx=8,
             pady=3,
-        ).pack(side=tk.RIGHT, padx=4)
+        )
+        self.btn_copy_matrix.pack(side=tk.RIGHT, padx=4)
+
+        self.topbar_buttons = [
+            self.btn_open_seq,
+            self.btn_method_editor,
+            self.btn_import_method,
+            self.btn_copy_matrix,
+            self.btn_export_excel,
+            self.btn_theme_toggle,
+        ]
 
         # Second row toolbar: Channel View + Manual Tools + Zoom Presets
-        subbar = tk.Frame(self, bg="#E9EDF4", pady=4, padx=8, bd=1, relief=tk.SOLID)
-        subbar.pack(side=tk.TOP, fill=tk.X)
+        self.subbar_frame = tk.Frame(
+            self,
+            bg="#E9EDF4",
+            pady=4,
+            padx=8,
+            bd=0,
+            relief=tk.FLAT,
+            highlightthickness=1,
+            highlightbackground="#B8C0CC",
+        )
+        self.subbar_frame.pack(side=tk.TOP, fill=tk.X)
 
-        # Channel Display Selection (F20)
-        tk.Label(
-            subbar,
+        self.lbl_channel_view = tk.Label(
+            self.subbar_frame,
             text="Channel View:",
             font=("Segoe UI", 9, "bold"),
             bg="#E9EDF4",
             fg="#1F3864",
-        ).pack(side=tk.LEFT, padx=(0, 4))
+        )
+        self.lbl_channel_view.pack(side=tk.LEFT, padx=(0, 4))
 
+        self.channel_rbs: Dict[str, tk.Radiobutton] = {}
         for c_label, c_val in [("Both", "both"), ("FID Only", "FID1A"), ("TCD Only", "TCD2B")]:
             rb = tk.Radiobutton(
-                subbar,
+                self.subbar_frame,
                 text=c_label,
                 variable=self.channel_view_var,
                 value=c_val,
@@ -324,120 +475,157 @@ class OpenChromLabApp(tk.Tk):
                 bg="#FFFFFF",
                 fg="#1F3864",
                 selectcolor="#CCE4F7",
-                padx=5,
+                padx=6,
                 pady=2,
-                bd=1,
-                relief=tk.RAISED,
+                bd=0,
+                relief=tk.FLAT,
+                offrelief=tk.FLAT,
+                overrelief=tk.FLAT,
+                highlightthickness=1,
+                highlightbackground="#B8C0CC",
             )
             rb.pack(side=tk.LEFT, padx=1)
+            self.channel_rbs[c_val] = rb
 
-        ttk.Separator(subbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=6)
+        ttk.Separator(self.subbar_frame, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=6)
 
-        tk.Label(
-            subbar,
+        self.lbl_manual_tools = tk.Label(
+            self.subbar_frame,
             text="Manual Tools:",
             font=("Segoe UI", 9, "bold"),
             bg="#E9EDF4",
             fg="#1F3864",
-        ).pack(side=tk.LEFT, padx=(0, 4))
+        )
+        self.lbl_manual_tools.pack(side=tk.LEFT, padx=(0, 4))
 
         self.tool_var = tk.StringVar(value="pan_zoom")
         tools = [
             ("🖱 Select / Pan", "pan_zoom"),
-            ("⚓ Anchors", "drag_anchor"),
+            ("⚓ Anchor", "drag_anchor"),
             ("✏ Draw (+/-)", "draw_peak"),
             ("✂ Split", "split_peak"),
         ]
+        self.tool_rbs: Dict[str, tk.Radiobutton] = {}
         for text, mode in tools:
             rb = tk.Radiobutton(
-                subbar,
+                self.subbar_frame,
                 text=text,
                 variable=self.tool_var,
                 value=mode,
-                command=lambda m=mode: self.chrom_canvas.set_tool_mode(m),
+                command=lambda m=mode: self._on_tool_button_clicked(m),
                 indicatoron=False,
                 font=("Segoe UI", 9),
                 bg="#FFFFFF",
                 fg="#1F3864",
                 selectcolor="#CCE4F7",
-                padx=5,
+                padx=6,
                 pady=2,
-                bd=1,
-                relief=tk.RAISED,
+                bd=0,
+                relief=tk.FLAT,
+                offrelief=tk.FLAT,
+                overrelief=tk.FLAT,
+                highlightthickness=1,
+                highlightbackground="#B8C0CC",
             )
             rb.pack(side=tk.LEFT, padx=1)
+            self.tool_rbs[mode] = rb
 
-        tk.Button(
-            subbar,
+        self.btn_invert = tk.Button(
+            self.subbar_frame,
             text="⇅ Invert (+/-)",
             command=self._toggle_selected_peak_polarity,
             font=("Segoe UI", 9),
             bg="#FFFFFF",
             fg="#5C2D91",
-            padx=4,
+            padx=5,
             pady=1,
-        ).pack(side=tk.LEFT, padx=2)
+            bd=0,
+            relief=tk.FLAT,
+            highlightthickness=1,
+            highlightbackground="#B8C0CC",
+        )
+        self.btn_invert.pack(side=tk.LEFT, padx=2)
 
-        tk.Button(
-            subbar,
+        self.btn_delete = tk.Button(
+            self.subbar_frame,
             text="🗑 Delete",
             command=self._delete_selected_peak,
             font=("Segoe UI", 9),
             bg="#FFFFFF",
             fg="#A4262C",
-            padx=4,
+            padx=5,
             pady=1,
-        ).pack(side=tk.LEFT, padx=2)
+            bd=0,
+            relief=tk.FLAT,
+            highlightthickness=1,
+            highlightbackground="#B8C0CC",
+        )
+        self.btn_delete.pack(side=tk.LEFT, padx=2)
 
-        tk.Button(
-            subbar,
+        self.btn_auto = tk.Button(
+            self.subbar_frame,
             text="⚡ Auto",
             command=self._reprocess_current_auto,
             font=("Segoe UI", 9),
             bg="#FFFFFF",
             fg="#004578",
-            padx=4,
+            padx=5,
             pady=1,
-        ).pack(side=tk.LEFT, padx=2)
+            bd=0,
+            relief=tk.FLAT,
+            highlightthickness=1,
+            highlightbackground="#B8C0CC",
+        )
+        self.btn_auto.pack(side=tk.LEFT, padx=2)
 
-        tk.Button(
-            subbar,
+        self.btn_rx = tk.Button(
+            self.subbar_frame,
             text="↺ .rx",
             command=self._reprocess_current_rx,
             font=("Segoe UI", 9),
             bg="#FFFFFF",
             fg="#333333",
-            padx=4,
+            padx=5,
             pady=1,
-        ).pack(side=tk.LEFT, padx=2)
+            bd=0,
+            relief=tk.FLAT,
+            highlightthickness=1,
+            highlightbackground="#B8C0CC",
+        )
+        self.btn_rx.pack(side=tk.LEFT, padx=2)
 
         # Quick Zoom Region Presets on right side using compact ttk.Combobox (F26)
-        zoom_frame = tk.Frame(subbar, bg="#E9EDF4")
-        zoom_frame.pack(side=tk.RIGHT, padx=2)
+        self.zoom_frame = tk.Frame(self.subbar_frame, bg="#E9EDF4")
+        self.zoom_frame.pack(side=tk.RIGHT, padx=2)
 
-        tk.Label(
-            zoom_frame,
+        self.lbl_zoom_preset = tk.Label(
+            self.zoom_frame,
             text="Zoom Preset:",
             font=("Segoe UI", 9, "bold"),
             bg="#E9EDF4",
             fg="#1F3864",
-        ).pack(side=tk.LEFT, padx=(2, 4))
+        )
+        self.lbl_zoom_preset.pack(side=tk.LEFT, padx=(2, 4))
 
-        tk.Button(
-            zoom_frame,
-            text="📷 Save Preset...",
+        self.btn_save_preset = tk.Button(
+            self.zoom_frame,
+            text="📷 Save Preset ▾",
             command=self._save_custom_zoom_preset,
             font=("Segoe UI", 9),
             bg="#FFFFFF",
             fg="#1F3864",
-            padx=5,
+            padx=6,
             pady=1,
-            relief=tk.RAISED,
-        ).pack(side=tk.LEFT, padx=2)
+            bd=0,
+            relief=tk.FLAT,
+            highlightthickness=1,
+            highlightbackground="#B8C0CC",
+        )
+        self.btn_save_preset.pack(side=tk.LEFT, padx=2)
 
         self.zoom_presets: Dict[str, Any] = {}
         self.zoom_combo = ttk.Combobox(
-            zoom_frame,
+            self.zoom_frame,
             values=[],
             state="readonly",
             width=22,
@@ -446,32 +634,93 @@ class OpenChromLabApp(tk.Tk):
         self.zoom_combo.pack(side=tk.LEFT, padx=2)
         self.zoom_combo.bind("<<ComboboxSelected>>", self._on_zoom_preset_selected)
 
-        tk.Button(
-            zoom_frame,
+        self.btn_auto_y = tk.Button(
+            self.zoom_frame,
             text="Auto-Y",
             command=lambda: self.chrom_canvas.autoscale_visible_y(),
             font=("Segoe UI", 9, "bold"),
             bg="#FFFFFF",
             fg="#1F3864",
-            padx=5,
+            padx=6,
             pady=1,
-            relief=tk.RAISED,
-        ).pack(side=tk.LEFT, padx=2)
+            bd=0,
+            relief=tk.FLAT,
+            highlightthickness=1,
+            highlightbackground="#B8C0CC",
+        )
+        self.btn_auto_y.pack(side=tk.LEFT, padx=2)
+
+        self.subbar_labels = [self.lbl_channel_view, self.lbl_manual_tools, self.lbl_zoom_preset]
+        self.subbar_action_buttons = [
+            self.btn_invert,
+            self.btn_delete,
+            self.btn_auto,
+            self.btn_rx,
+            self.btn_save_preset,
+            self.btn_auto_y,
+        ]
+        self._refresh_segmented_button_styles()
 
         self._refresh_zoom_presets()
         if "Reaction (3.5–16.5m)" in self.zoom_combo["values"]:
             self.zoom_combo.set("Reaction (3.5–16.5m)")
 
+    def _on_tool_button_clicked(self, mode: str) -> None:
+        self.tool_var.set(mode)
+        self._refresh_segmented_button_styles()
+        if hasattr(self, "chrom_canvas"):
+            self.chrom_canvas.set_tool_mode(mode)
+
+    def _refresh_segmented_button_styles(self) -> None:
+        """Apply flat active/inactive pill colors to Channel View and Manual Tools buttons."""
+        palette = self.theme
+        act_bg = getattr(palette, "subbar_active_bg", "#2563EB")
+        act_fg = getattr(palette, "subbar_active_fg", "#FFFFFF")
+        act_bd = getattr(palette, "subbar_active_border", "#3B82F6")
+        inact_bg = palette.subbar_btn_bg
+        inact_fg = "#94A3B8" if palette.name == "dark" else palette.subbar_btn_fg
+        inact_bd = getattr(palette, "subbar_btn_border", palette.panel_border)
+
+        cur_chan = self.channel_view_var.get()
+        for val, rb in getattr(self, "channel_rbs", {}).items():
+            is_act = (val == cur_chan)
+            rb.configure(
+                bg=act_bg if is_act else inact_bg,
+                fg=act_fg if is_act else inact_fg,
+                selectcolor=act_bg,
+                activebackground=act_bg,
+                activeforeground=act_fg,
+                highlightbackground=act_bd if is_act else inact_bd,
+                relief=tk.FLAT,
+                offrelief=tk.FLAT,
+                overrelief=tk.FLAT,
+            )
+
+        cur_tool = self.tool_var.get() if hasattr(self, "tool_var") else "pan_zoom"
+        for mode, rb in getattr(self, "tool_rbs", {}).items():
+            is_act = (mode == cur_tool)
+            rb.configure(
+                bg=act_bg if is_act else inact_bg,
+                fg=act_fg if is_act else inact_fg,
+                selectcolor=act_bg,
+                activebackground=act_bg,
+                activeforeground=act_fg,
+                highlightbackground=act_bd if is_act else inact_bd,
+                relief=tk.FLAT,
+                offrelief=tk.FLAT,
+                overrelief=tk.FLAT,
+            )
+
     def _build_main_panes(self) -> None:
-        outer_paned = ttk.PanedWindow(self, orient=tk.HORIZONTAL)
-        outer_paned.pack(fill=tk.BOTH, expand=True, padx=6, pady=4)
+        self.outer_paned = ttk.PanedWindow(self, orient=tk.HORIZONTAL)
+        self.outer_paned.pack(fill=tk.BOTH, expand=True, padx=6, pady=4)
 
         # 1. Left Sidebar: Sequence / Injections Tree + Overlay Toggles
-        left_frame = ttk.Frame(outer_paned, width=310)
-        outer_paned.add(left_frame, weight=0)
+        self.left_frame = ttk.Frame(self.outer_paned, width=310)
+        self.outer_paned.add(self.left_frame, weight=0)
 
-        lbl_seq = tk.Label(
-            left_frame,
+        self.lbl_seq = tk.Label(
+            self.left_frame,
             text="Sequence Injections (.D)",
             font=("Segoe UI", 9, "bold"),
             bg="#D9E1F2",
@@ -479,10 +728,13 @@ class OpenChromLabApp(tk.Tk):
             anchor="w",
             padx=6,
             pady=4,
+            bd=0,
+            highlightthickness=1,
+            highlightbackground="#B8C0CC",
         )
-        lbl_seq.pack(fill=tk.X)
+        self.lbl_seq.pack(fill=tk.X)
 
-        tree_container = ttk.Frame(left_frame)
+        tree_container = ttk.Frame(self.left_frame)
         tree_container.pack(fill=tk.BOTH, expand=True, pady=(2, 4))
 
         self.inj_tree = ttk.Treeview(
@@ -498,19 +750,19 @@ class OpenChromLabApp(tk.Tk):
         self.inj_tree.column("sample", width=215, anchor="w", stretch=True)
         self.inj_tree.column("mode", width=54, anchor="center", stretch=False)
 
-        inj_scroll = ttk.Scrollbar(tree_container, orient=tk.VERTICAL, command=self.inj_tree.yview)
-        self.inj_tree.configure(yscrollcommand=inj_scroll.set)
+        self.inj_scroll = ttk.Scrollbar(tree_container, orient=tk.VERTICAL, command=self.inj_tree.yview)
+        self.inj_tree.configure(yscrollcommand=self.inj_scroll.set)
         self.inj_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        inj_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.inj_scroll.pack(side=tk.RIGHT, fill=tk.Y)
         self.inj_tree.bind("<<TreeviewSelect>>", self._on_injection_selected)
 
-        # Display Overlay Checkboxes inside Left Panel
-        right_paned = ttk.PanedWindow(outer_paned, orient=tk.VERTICAL)
-        outer_paned.add(right_paned, weight=1)
+        # Right PanedWindow (Chromatogram + Bottom Notebook)
+        self.right_paned = ttk.PanedWindow(self.outer_paned, orient=tk.VERTICAL)
+        self.outer_paned.add(self.right_paned, weight=1)
 
         # 2. Top-Right: Dual Stacked Chromatogram Viewer
-        chrom_frame = ttk.Frame(right_paned)
-        right_paned.add(chrom_frame, weight=3)
+        chrom_frame = ttk.Frame(self.right_paned)
+        self.right_paned.add(chrom_frame, weight=3)
 
         self.chrom_canvas = DualChromatogramCanvas(
             chrom_frame,
@@ -519,42 +771,85 @@ class OpenChromLabApp(tk.Tk):
         )
         self.chrom_canvas.pack(fill=tk.BOTH, expand=True)
 
-        # Add display checkboxes in left panel now that chrom_canvas exists
-        ov_frame = ttk.LabelFrame(left_frame, text="Plot Overlays & Options", padding=6)
-        ov_frame.pack(fill=tk.X, pady=2)
-        ttk.Checkbutton(
-            ov_frame,
-            text="Show Compound Names & RTs",
-            variable=self.chrom_canvas.show_compound_labels,
-            command=self.chrom_canvas.redraw,
-        ).pack(anchor="w")
-        ttk.Checkbutton(
-            ov_frame,
-            text="Show RT Identification Windows",
-            variable=self.chrom_canvas.show_rt_windows,
-            command=self.chrom_canvas.redraw,
-        ).pack(anchor="w")
-        ttk.Checkbutton(
-            ov_frame,
-            text="Show Timed Integration Events",
-            variable=self.chrom_canvas.show_timed_events,
-            command=self.chrom_canvas.redraw,
-        ).pack(anchor="w")
-        ttk.Checkbutton(
-            ov_frame,
-            text="Show Baselines & Anchors",
-            variable=self.chrom_canvas.show_baselines,
-            command=self.chrom_canvas.redraw,
-        ).pack(anchor="w")
-        ttk.Checkbutton(
-            ov_frame,
-            text="Snap Dragged Anchors to Curve",
-            variable=self.chrom_canvas.snap_anchors_to_trace,
-        ).pack(anchor="w")
+        # Modern "Plot Overlays & Options" Card with Master Toggle + 5 Pill Toggle Switches (F9)
+        card_bg = getattr(self.theme, "overlay_card_bg", self.theme.bg_frame)
+        card_bd = getattr(self.theme, "overlay_card_border", self.theme.panel_border)
+        self.ov_frame = tk.Frame(
+            self.left_frame,
+            bg=card_bg,
+            bd=0,
+            relief=tk.FLAT,
+            highlightthickness=1,
+            highlightbackground=card_bd,
+            padx=8,
+            pady=6,
+        )
+        self.ov_frame.pack(fill=tk.X, pady=2)
+
+        self.ov_header_frame = tk.Frame(self.ov_frame, bg=card_bg)
+        self.ov_header_frame.pack(fill=tk.X, pady=(0, 4))
+
+        self.lbl_ov_title = tk.Label(
+            self.ov_header_frame,
+            text="Plot Overlays & Options",
+            font=("Segoe UI", 9, "bold"),
+            bg=card_bg,
+            fg=self.theme.fg_app,
+            anchor="w",
+        )
+        self.lbl_ov_title.pack(side=tk.LEFT)
+
+        self.master_overlay_var = tk.BooleanVar(value=True)
+        self.master_toggle_switch = PillToggleSwitch(
+            self.ov_header_frame,
+            variable=self.master_overlay_var,
+            command=self._on_master_overlay_toggled,
+            palette=self.theme,
+        )
+        self.master_toggle_switch.pack(side=tk.RIGHT)
+
+        self.ov_sep = tk.Frame(self.ov_frame, bg=card_bd, height=1)
+        self.ov_sep.pack(fill=tk.X, pady=(2, 4))
+
+        overlay_defs = [
+            ("Show Compound Names & RTs", self.chrom_canvas.show_compound_labels, self.chrom_canvas.redraw),
+            ("Show RT Identification Windows", self.chrom_canvas.show_rt_windows, self.chrom_canvas.redraw),
+            ("Show Timed Integration Events", self.chrom_canvas.show_timed_events, self.chrom_canvas.redraw),
+            ("Show Baselines & Anchors", self.chrom_canvas.show_baselines, self.chrom_canvas.redraw),
+            ("Snap Dragged Anchors to Curve", self.chrom_canvas.snap_anchors_to_trace, None),
+        ]
+        self.overlay_row_frames: List[tk.Frame] = []
+        self.overlay_row_labels: List[tk.Label] = []
+        self.overlay_toggle_switches: List[PillToggleSwitch] = []
+
+        for label_text, bvar, cmd in overlay_defs:
+            row_f = tk.Frame(self.ov_frame, bg=card_bg, pady=2)
+            row_f.pack(fill=tk.X)
+            lbl = tk.Label(
+                row_f,
+                text=f"✓ {label_text}",
+                font=("Segoe UI", 8),
+                bg=card_bg,
+                fg=self.theme.fg_app,
+                anchor="w",
+                cursor="hand2",
+            )
+            lbl.pack(side=tk.LEFT, fill=tk.X, expand=True)
+            sw = PillToggleSwitch(
+                row_f,
+                variable=bvar,
+                command=cmd,
+                palette=self.theme,
+            )
+            sw.pack(side=tk.RIGHT, padx=(4, 0))
+            lbl.bind("<Button-1>", lambda e, s=sw: s._on_click())
+            self.overlay_row_frames.append(row_f)
+            self.overlay_row_labels.append(lbl)
+            self.overlay_toggle_switches.append(sw)
 
         # 3. Bottom-Right: Notebook with 4 Tabs
-        bottom_frame = ttk.Frame(right_paned)
-        right_paned.add(bottom_frame, weight=2)
+        bottom_frame = ttk.Frame(self.right_paned)
+        self.right_paned.add(bottom_frame, weight=2)
 
         self.notebook = ttk.Notebook(bottom_frame)
         self.notebook.pack(fill=tk.BOTH, expand=True)
@@ -563,6 +858,18 @@ class OpenChromLabApp(tk.Tk):
         self._build_tab_compound_table()
         self._build_tab_timed_events()
         self._build_tab_matrix_preview()
+
+    def _on_master_overlay_toggled(self) -> None:
+        state = bool(self.master_overlay_var.get())
+        for bvar in (
+            self.chrom_canvas.show_compound_labels,
+            self.chrom_canvas.show_rt_windows,
+            self.chrom_canvas.show_timed_events,
+            self.chrom_canvas.show_baselines,
+            self.chrom_canvas.snap_anchors_to_trace,
+        ):
+            bvar.set(state)
+        self.chrom_canvas.redraw()
 
     def _build_tab_injection_peaks(self) -> None:
         tab = ttk.Frame(self.notebook)
@@ -625,22 +932,23 @@ class OpenChromLabApp(tk.Tk):
         tab = ttk.Frame(self.notebook)
         self.notebook.add(tab, text="  2. Method Compound Table (16 Compounds)  ")
 
-        btn_bar = tk.Frame(tab, bg="#F0F2F5", pady=3)
-        btn_bar.pack(side=tk.TOP, fill=tk.X, padx=6)
+        self.tab2_btn_bar = tk.Frame(tab, bg="#F0F2F5", pady=3)
+        self.tab2_btn_bar.pack(side=tk.TOP, fill=tk.X, padx=6)
 
-        tk.Label(
-            btn_bar,
+        self.tab2_lbl = tk.Label(
+            self.tab2_btn_bar,
             text="Method Compounds (16) — Double-click to edit, click to highlight on plot:",
             font=("Segoe UI", 9, "bold"),
             bg="#F0F2F5",
             fg="#1F3864",
-        ).pack(side=tk.LEFT)
+        )
+        self.tab2_lbl.pack(side=tk.LEFT)
 
-        ttk.Button(btn_bar, text="🛠 Open Method Editor...", command=self._open_method_editor_dialog).pack(side=tk.RIGHT, padx=3)
-        ttk.Button(btn_bar, text="💾 Save Method (.json)", command=self._save_method_dialog).pack(side=tk.RIGHT, padx=3)
-        ttk.Button(btn_bar, text="➖ Remove", command=self._remove_selected_compound).pack(side=tk.RIGHT, padx=3)
-        ttk.Button(btn_bar, text="➕ Add", command=self._add_compound_dialog).pack(side=tk.RIGHT, padx=3)
-        ttk.Button(btn_bar, text="✏ Edit Compound", command=self._edit_selected_compound_dialog).pack(side=tk.RIGHT, padx=3)
+        ttk.Button(self.tab2_btn_bar, text="🛠 Open Method Editor...", command=self._open_method_editor_dialog).pack(side=tk.RIGHT, padx=3)
+        ttk.Button(self.tab2_btn_bar, text="💾 Save Method (.json)", command=self._save_method_dialog).pack(side=tk.RIGHT, padx=3)
+        ttk.Button(self.tab2_btn_bar, text="➖ Remove", command=self._remove_selected_compound).pack(side=tk.RIGHT, padx=3)
+        ttk.Button(self.tab2_btn_bar, text="➕ Add", command=self._add_compound_dialog).pack(side=tk.RIGHT, padx=3)
+        ttk.Button(self.tab2_btn_bar, text="✏ Edit Compound", command=self._edit_selected_compound_dialog).pack(side=tk.RIGHT, padx=3)
 
         cols = (
             "idx",
@@ -787,21 +1095,22 @@ class OpenChromLabApp(tk.Tk):
         tab = ttk.Frame(self.notebook)
         self.notebook.add(tab, text="  4. Single-Sheet Matrix Preview (Rows=Compounds, Cols=Injections)  ")
 
-        top_bar = tk.Frame(tab, bg="#F0F2F5", pady=4)
-        top_bar.pack(side=tk.TOP, fill=tk.X, padx=6)
+        self.tab4_top_bar = tk.Frame(tab, bg="#F0F2F5", pady=4)
+        self.tab4_top_bar.pack(side=tk.TOP, fill=tk.X, padx=6)
 
-        tk.Label(
-            top_bar,
+        self.tab4_lbl = tk.Label(
+            self.tab4_top_bar,
             text="Live Preview of Single-Sheet Export (Rows = 16 Method Compounds | Columns = All Loaded Injections):",
             font=("Segoe UI", 9, "bold"),
             bg="#F0F2F5",
             fg="#1F3864",
-        ).pack(side=tk.LEFT)
+        )
+        self.tab4_lbl.pack(side=tk.LEFT)
 
         self.preview_metric_var = tk.StringVar(value="area")
         for lbl, val in (("Area", "area"), ("Area %", "area_pct"), ("Height", "height"), ("RT (min)", "rt")):
             ttk.Radiobutton(
-                top_bar,
+                self.tab4_top_bar,
                 text=lbl,
                 variable=self.preview_metric_var,
                 value=val,
@@ -809,13 +1118,13 @@ class OpenChromLabApp(tk.Tk):
             ).pack(side=tk.LEFT, padx=6)
 
         ttk.Button(
-            top_bar,
+            self.tab4_top_bar,
             text="📊 Export Single-Sheet .xlsx...",
             command=self._export_excel_dialog,
         ).pack(side=tk.RIGHT, padx=4)
 
         ttk.Button(
-            top_bar,
+            self.tab4_top_bar,
             text="📋 Copy Table (Paste Directly into Excel)",
             command=self._copy_matrix_to_clipboard,
         ).pack(side=tk.RIGHT, padx=4)
@@ -847,6 +1156,9 @@ class OpenChromLabApp(tk.Tk):
             anchor="w",
             padx=10,
             pady=3,
+            bd=0,
+            highlightthickness=1,
+            highlightbackground="#B8C0CC",
         )
         self.status_bar_lbl.pack(side=tk.BOTTOM, fill=tk.X)
 
@@ -876,7 +1188,7 @@ class OpenChromLabApp(tk.Tk):
                 if not loaded_pmx and inj.pmx_path and os.path.exists(inj.pmx_path):
                     try:
                         self.method = load_pmx_method(inj.pmx_path)
-                        self.lbl_method_badge.configure(text=f"Method: {self.method.name}")
+                        self.lbl_method_badge.configure(text=f"Method: {self.method.name} ⚙")
                         loaded_pmx = True
                     except Exception:
                         pass
@@ -1259,6 +1571,7 @@ class OpenChromLabApp(tk.Tk):
         dlg.title("Add Compound" if is_new else f"Edit Compound #{comp.index} — {comp.name}")
         dlg.minsize(380, 320)
         dlg.resizable(True, True)
+        dlg.configure(bg=self.theme.bg_frame)
         dlg.transient(self)
         dlg.grab_set()
 
@@ -1365,7 +1678,7 @@ class OpenChromLabApp(tk.Tk):
         dlg.transient(self)
         dlg.grab_set()
         dlg.resizable(False, False)
-        dlg.configure(padx=16, pady=12)
+        dlg.configure(padx=16, pady=12, bg=self.theme.bg_frame)
 
         time_var = tk.StringVar(value=f"{curr_ev.time_min:.3f}")
         event_types = [
@@ -1479,7 +1792,7 @@ class OpenChromLabApp(tk.Tk):
             self.method = load_pmx_method(fpath)
         else:
             self.method = ProcessingMethod.load_json(fpath)
-        self.lbl_method_badge.configure(text=f"Method: {self.method.name}")
+        self.lbl_method_badge.configure(text=f"Method: {self.method.name} ⚙")
         self._refresh_zoom_presets()
         self._refresh_method_tabs()
         self._reprocess_all(prefer_rx=True)
@@ -1584,6 +1897,7 @@ class OpenChromLabApp(tk.Tk):
         else:
             m = "both"
         self.channel_view_var.set(m)
+        self._refresh_segmented_button_styles()
         self.chrom_canvas.set_channel_mode(m)
         self.update_idletasks()
 
@@ -1591,7 +1905,7 @@ class OpenChromLabApp(tk.Tk):
         self.set_channel_view(self.channel_view_var.get())
 
     # ------------------------------------------------------------------
-    # Theme Management & Toggle (F23 / R4)
+    # Theme Management & Toggle (F23 / R4 / F8–F11)
     # ------------------------------------------------------------------
 
     def _toggle_theme(self) -> None:
@@ -1599,74 +1913,333 @@ class OpenChromLabApp(tk.Tk):
         new_theme = "dark" if self.current_theme_name == "light" else "light"
         self.set_theme(new_theme)
 
+    def _style_menu_widget(self, menu_w: tk.Menu, palette: ThemePalette) -> None:
+        try:
+            menu_w.configure(
+                bg=palette.bg_frame,
+                fg=palette.fg_app,
+                activebackground=palette.tree_selected_bg,
+                activeforeground=palette.tree_selected_fg,
+                bd=0,
+            )
+        except Exception:
+            pass
+
     def set_theme(self, theme_name: str) -> None:
-        """Apply theme by name: 'light' or 'dark'."""
+        """Apply theme by name: 'light' or 'dark' across all toolbars, panels, switches, tabs, and tables."""
         norm = theme_name.lower().strip()
         palette = DARK_PALETTE if norm == "dark" else LIGHT_PALETTE
         self.current_theme_name = palette.name
         self.theme = palette
 
         self.configure(bg=palette.bg_app)
+
+        # 1. Top Header Toolbar & Method Pill Badge (F8)
+        if hasattr(self, "topbar_frame"):
+            self.topbar_frame.configure(
+                bg=palette.topbar_bg,
+                highlightbackground=palette.panel_border,
+            )
+        if hasattr(self, "lbl_app_title"):
+            self.lbl_app_title.configure(bg=palette.topbar_bg, fg=palette.topbar_fg)
+        if hasattr(self, "lbl_method_badge"):
+            self.lbl_method_badge.configure(
+                bg=getattr(palette, "method_badge_bg", palette.topbar_btn_bg),
+                fg=getattr(palette, "method_badge_fg", "#FBBF24"),
+                highlightbackground=getattr(palette, "method_badge_border", palette.panel_border),
+            )
+        top_btn_bd = getattr(palette, "topbar_btn_border", palette.panel_border)
+        for btn in getattr(self, "topbar_buttons", []):
+            if btn is getattr(self, "btn_export_excel", None) and norm != "dark":
+                btn.configure(
+                    bg="#107C41",
+                    fg="#FFFFFF",
+                    activebackground="#0B5C2E",
+                    activeforeground="#FFFFFF",
+                    highlightbackground="#0B5C2E",
+                )
+            else:
+                btn.configure(
+                    bg=palette.topbar_btn_bg,
+                    fg=palette.topbar_btn_fg,
+                    activebackground=palette.tree_selected_bg,
+                    activeforeground="#FFFFFF",
+                    highlightbackground=top_btn_bd,
+                    relief=tk.FLAT,
+                )
         if hasattr(self, "btn_theme_toggle"):
             self.btn_theme_toggle.configure(
                 text="☀️ Light Mode" if norm == "dark" else "🌙 Dark Mode",
                 bg=palette.topbar_btn_bg,
                 fg=palette.topbar_btn_fg,
+                highlightbackground=top_btn_bd,
             )
 
+        # 2. Second-Row Sub-Toolbar, Segmented Pills, Manual Action Buttons & Zoom Frame (F8)
+        if hasattr(self, "subbar_frame"):
+            self.subbar_frame.configure(
+                bg=palette.subbar_bg,
+                highlightbackground=palette.panel_border,
+                relief=tk.FLAT,
+            )
+        if hasattr(self, "zoom_frame"):
+            self.zoom_frame.configure(bg=palette.subbar_bg)
+        for lbl in getattr(self, "subbar_labels", []):
+            lbl.configure(bg=palette.subbar_bg, fg=palette.subbar_fg)
+
+        sub_btn_bd = getattr(palette, "subbar_btn_border", palette.panel_border)
+        del_fg = getattr(palette, "subbar_delete_fg", "#F87171")
+        for btn in getattr(self, "subbar_action_buttons", []):
+            fg_col = del_fg if btn is getattr(self, "btn_delete", None) else palette.subbar_btn_fg
+            btn.configure(
+                bg=palette.subbar_btn_bg,
+                fg=fg_col,
+                activebackground=palette.tree_selected_bg,
+                activeforeground="#FFFFFF",
+                highlightbackground=sub_btn_bd,
+                relief=tk.FLAT,
+            )
+        self._refresh_segmented_button_styles()
+
+        # 3. Left Sidebar Sequence Header & Plot Overlays Card + Pill Toggle Switches (F9)
+        if hasattr(self, "lbl_seq"):
+            self.lbl_seq.configure(
+                bg=getattr(palette, "seq_header_bg", palette.subbar_bg),
+                fg=getattr(palette, "seq_header_fg", palette.fg_app),
+                highlightbackground=palette.panel_border,
+            )
+        card_bg = getattr(palette, "overlay_card_bg", palette.bg_frame)
+        card_bd = getattr(palette, "overlay_card_border", palette.panel_border)
+        if hasattr(self, "ov_frame"):
+            self.ov_frame.configure(bg=card_bg, highlightbackground=card_bd)
+        if hasattr(self, "ov_header_frame"):
+            self.ov_header_frame.configure(bg=card_bg)
+        if hasattr(self, "lbl_ov_title"):
+            self.lbl_ov_title.configure(bg=card_bg, fg=palette.fg_app)
+        if hasattr(self, "ov_sep"):
+            self.ov_sep.configure(bg=card_bd)
+        if hasattr(self, "master_toggle_switch"):
+            self.master_toggle_switch.set_theme(palette)
+        for rf in getattr(self, "overlay_row_frames", []):
+            rf.configure(bg=card_bg)
+        for rl in getattr(self, "overlay_row_labels", []):
+            rl.configure(bg=card_bg, fg=palette.fg_app)
+        for sw in getattr(self, "overlay_toggle_switches", []):
+            sw.set_theme(palette)
+
+        # 4. Tab 2 & Tab 4 Sub-bars (F11)
+        if hasattr(self, "tab2_btn_bar"):
+            self.tab2_btn_bar.configure(bg=palette.bg_frame)
+        if hasattr(self, "tab2_lbl"):
+            self.tab2_lbl.configure(bg=palette.bg_frame, fg=palette.fg_app)
+        if hasattr(self, "tab4_top_bar"):
+            self.tab4_top_bar.configure(bg=palette.bg_frame)
+        if hasattr(self, "tab4_lbl"):
+            self.tab4_lbl.configure(bg=palette.bg_frame, fg=palette.fg_app)
+
+        # 5. Menu Bars
+        for m in (
+            getattr(self, "menubar", None),
+            getattr(self, "file_menu", None),
+            getattr(self, "int_menu", None),
+            getattr(self, "view_menu", None),
+            getattr(self, "chan_menu", None),
+        ):
+            if m is not None:
+                self._style_menu_widget(m, palette)
+
+        # 6. Comprehensive ttk.Style Configuration (F9, F11)
         style = ttk.Style(self)
+        row_h = getattr(self, "_tree_row_height", 26)
         if norm == "dark":
             if "clam" in style.theme_names():
                 style.theme_use("clam")
-            style.configure(
-                "Treeview",
-                background=palette.tree_bg,
-                foreground=palette.tree_fg,
-                fieldbackground=palette.tree_bg,
-            )
-            style.configure(
-                "Treeview.Heading",
-                background=palette.tree_header_bg,
-                foreground=palette.tree_header_fg,
-            )
-            style.configure("TNotebook", background=palette.bg_app)
-            style.configure("TNotebook.Tab", background=palette.bg_frame, foreground=palette.fg_app)
-            style.map(
-                "TNotebook.Tab",
-                background=[("selected", palette.topbar_bg)],
-                foreground=[("selected", "#FFFFFF")],
-            )
         else:
             if "vista" in style.theme_names():
                 style.theme_use("vista")
             elif "clam" in style.theme_names():
                 style.theme_use("clam")
-            style.configure(
-                "Treeview",
-                background=palette.tree_bg,
-                foreground=palette.tree_fg,
-                fieldbackground=palette.tree_bg,
-            )
-            style.configure(
-                "Treeview.Heading",
-                background=palette.tree_header_bg,
-                foreground=palette.tree_header_fg,
-            )
-            style.configure("TNotebook", background=palette.bg_app)
-            style.configure("TNotebook.Tab", background=palette.bg_frame, foreground=palette.fg_app)
+
+        style.configure("TFrame", background=palette.bg_frame)
+        style.configure("TPanedwindow", background=palette.bg_app)
+        style.configure("Sash", sashthickness=4, background=palette.panel_border)
+        style.configure("TSeparator", background=palette.panel_border)
+        style.configure("TLabel", background=palette.bg_frame, foreground=palette.fg_app)
+        style.configure(
+            "TLabelframe",
+            background=palette.bg_frame,
+            foreground=palette.fg_app,
+            bordercolor=palette.panel_border,
+            relief="flat",
+        )
+        style.configure(
+            "TLabelframe.Label",
+            background=palette.bg_frame,
+            foreground=palette.panel_title,
+            font=("Segoe UI", 9, "bold"),
+        )
+        style.configure(
+            "TButton",
+            background=palette.subbar_btn_bg,
+            foreground=palette.subbar_btn_fg,
+            bordercolor=sub_btn_bd,
+            lightcolor=palette.subbar_btn_bg,
+            darkcolor=palette.subbar_btn_bg,
+            relief="flat",
+            padding=(6, 2),
+        )
+        style.map(
+            "TButton",
+            background=[("active", palette.tree_selected_bg), ("pressed", palette.subbar_active_bg)],
+            foreground=[("active", "#FFFFFF"), ("pressed", "#FFFFFF")],
+        )
+        style.configure(
+            "TRadiobutton",
+            background=palette.bg_frame,
+            foreground=palette.fg_app,
+            indicatorbackground=palette.tree_bg,
+            indicatorforeground=palette.trace_fid,
+        )
+        style.map(
+            "TRadiobutton",
+            background=[("active", palette.bg_frame)],
+            foreground=[("active", palette.topbar_fg)],
+        )
+        style.configure(
+            "TCheckbutton",
+            background=palette.bg_frame,
+            foreground=palette.fg_app,
+        )
+        style.configure(
+            "TEntry",
+            fieldbackground=palette.tree_bg,
+            foreground=palette.tree_fg,
+            insertcolor=palette.tree_fg,
+            bordercolor=palette.panel_border,
+            lightcolor=palette.panel_border,
+            darkcolor=palette.panel_border,
+        )
+        style.configure(
+            "TCombobox",
+            fieldbackground=palette.subbar_btn_bg,
+            background=palette.subbar_btn_bg,
+            foreground=palette.subbar_btn_fg,
+            arrowcolor=palette.subbar_btn_fg,
+            bordercolor=sub_btn_bd,
+            lightcolor=palette.subbar_btn_bg,
+            darkcolor=palette.subbar_btn_bg,
+        )
+        style.map(
+            "TCombobox",
+            fieldbackground=[("readonly", palette.subbar_btn_bg)],
+            selectbackground=[("readonly", palette.subbar_btn_bg)],
+            selectforeground=[("readonly", palette.subbar_btn_fg)],
+            background=[("readonly", palette.subbar_btn_bg)],
+            foreground=[("readonly", palette.subbar_btn_fg)],
+        )
+        self.option_add("*TCombobox*Listbox.background", palette.tree_bg)
+        self.option_add("*TCombobox*Listbox.foreground", palette.tree_fg)
+        self.option_add("*TCombobox*Listbox.selectBackground", palette.tree_selected_bg)
+        self.option_add("*TCombobox*Listbox.selectForeground", palette.tree_selected_fg)
+
+        style.configure(
+            "Vertical.TScrollbar",
+            background=palette.subbar_btn_bg,
+            troughcolor=palette.tree_bg,
+            bordercolor=palette.tree_bg,
+            arrowcolor=palette.axis_text,
+            relief="flat",
+        )
+        style.configure(
+            "Horizontal.TScrollbar",
+            background=palette.subbar_btn_bg,
+            troughcolor=palette.tree_bg,
+            bordercolor=palette.tree_bg,
+            arrowcolor=palette.axis_text,
+            relief="flat",
+        )
+
+        style.configure(
+            "Treeview",
+            font=("Segoe UI", 9),
+            rowheight=row_h,
+            background=palette.tree_bg,
+            foreground=palette.tree_fg,
+            fieldbackground=palette.tree_bg,
+            bordercolor=palette.panel_border,
+            lightcolor=palette.panel_border,
+            darkcolor=palette.panel_border,
+            borderwidth=0,
+            relief="flat",
+        )
+        style.map(
+            "Treeview",
+            background=[("selected", palette.tree_selected_bg)],
+            foreground=[("selected", palette.tree_selected_fg)],
+        )
+        style.configure(
+            "Treeview.Heading",
+            font=("Segoe UI", 9, "bold"),
+            background=palette.tree_header_bg,
+            foreground=palette.tree_header_fg,
+            bordercolor=palette.panel_border,
+            lightcolor=palette.tree_header_bg,
+            darkcolor=palette.tree_header_bg,
+            relief="flat",
+        )
+        style.map(
+            "Treeview.Heading",
+            background=[("active", palette.subbar_btn_bg)],
+            foreground=[("active", palette.topbar_fg)],
+        )
+
+        # Notebook & Active Cyan/Teal Tab Styling (F11)
+        tab_act_bg = getattr(palette, "tab_active_bg", "#0E4149")
+        tab_act_fg = getattr(palette, "tab_active_fg", "#38BDF8")
+        tab_inact_bg = getattr(palette, "tab_inactive_bg", palette.bg_frame)
+        tab_inact_fg = getattr(palette, "tab_inactive_fg", palette.fg_app)
+        style.configure(
+            "TNotebook",
+            background=palette.bg_app,
+            bordercolor=palette.panel_border,
+            lightcolor=palette.panel_border,
+            darkcolor=palette.panel_border,
+            tabmargins=(2, 2, 2, 0),
+        )
+        style.configure(
+            "TNotebook.Tab",
+            font=("Segoe UI", 9, "bold"),
+            padding=(12, 5),
+            background=tab_inact_bg,
+            foreground=tab_inact_fg,
+            bordercolor=palette.panel_border,
+            lightcolor=tab_act_fg if norm == "dark" else palette.panel_border,
+            darkcolor=palette.panel_border,
+        )
+        style.map(
+            "TNotebook.Tab",
+            background=[("selected", tab_act_bg), ("active", palette.subbar_btn_bg)],
+            foreground=[("selected", tab_act_fg), ("active", palette.topbar_fg)],
+        )
 
         if hasattr(self, "peak_tree"):
             self.peak_tree.tag_configure("identified", background=palette.tag_identified_bg, foreground=palette.tag_identified_fg, font=("Segoe UI", 9, "bold"))
             self.peak_tree.tag_configure("negative", background=palette.tag_negative_bg, foreground=palette.tag_negative_fg, font=("Segoe UI", 9, "bold"))
             self.peak_tree.tag_configure("unidentified", foreground=palette.tag_unidentified_fg)
         if hasattr(self, "comp_tree"):
-            self.comp_tree.tag_configure("found", background=palette.tag_found_bg)
+            self.comp_tree.tag_configure("found", background=palette.tag_found_bg, foreground=palette.tree_fg)
             self.comp_tree.tag_configure("missing", foreground=palette.tag_missing_fg)
         if hasattr(self, "status_bar_lbl"):
-            self.status_bar_lbl.configure(bg=palette.status_bg, fg=palette.status_fg)
+            self.status_bar_lbl.configure(
+                bg=palette.status_bg,
+                fg=palette.status_fg,
+                highlightbackground=palette.panel_border,
+            )
 
         if hasattr(self, "chrom_canvas"):
             self.chrom_canvas.set_theme(palette)
+
+        self.update_idletasks()
 
     # ------------------------------------------------------------------
     # Undo Stack (Ctrl+Z) & Escape Deselect (F28 / R7)
@@ -1712,6 +2285,7 @@ class OpenChromLabApp(tk.Tk):
         self.chrom_canvas.selected_peak_id = None
         self.chrom_canvas.highlighted_compound = None
         self.tool_var.set("pan_zoom")
+        self._refresh_segmented_button_styles()
         self.chrom_canvas.set_tool_mode("pan_zoom")
         for tree in (self.peak_tree, self.comp_tree):
             sel = tree.selection()
@@ -1803,14 +2377,14 @@ class OpenChromLabApp(tk.Tk):
     # ------------------------------------------------------------------
 
     def _open_new_method_dialog(self) -> None:
-        MethodEditorDialog(self, method=None, on_method_saved=self._on_method_saved_from_editor)
+        MethodEditorDialog(self, method=None, on_method_saved=self._on_method_saved_from_editor, theme=self.theme)
 
     def _open_method_editor_dialog(self) -> None:
-        MethodEditorDialog(self, method=self.method, on_method_saved=self._on_method_saved_from_editor)
+        MethodEditorDialog(self, method=self.method, on_method_saved=self._on_method_saved_from_editor, theme=self.theme)
 
     def _on_method_saved_from_editor(self, updated_method: ProcessingMethod) -> None:
         self.method = updated_method
-        self.lbl_method_badge.configure(text=f"Method: {self.method.name}")
+        self.lbl_method_badge.configure(text=f"Method: {self.method.name} ⚙")
         self._refresh_zoom_presets()
         self._refresh_method_tabs()
         self._reprocess_all(prefer_rx=True)
@@ -1837,6 +2411,7 @@ class OpenChromLabApp(tk.Tk):
 
         sig = self.current_injection.signals[sname]
         menu = tk.Menu(self.chrom_canvas.canvas, tearoff=0)
+        self._style_menu_widget(menu, self.theme)
 
         val = hit_type.value if hasattr(hit_type, "value") else str(hit_type).lower()
 
@@ -1861,6 +2436,7 @@ class OpenChromLabApp(tk.Tk):
                 command=lambda: self._context_action_adjust_anchors(pk.peak_id),
             )
             sub_comp = tk.Menu(menu, tearoff=0)
+            self._style_menu_widget(sub_comp, self.theme)
             self._populate_compound_menu_items(sub_comp, sname, pk)
             menu.add_cascade(label="🏷 Assign Compound", menu=sub_comp)
             menu.add_separator()
@@ -1894,6 +2470,7 @@ class OpenChromLabApp(tk.Tk):
                 command=lambda: self._context_action_delete_peak(sname, pk.peak_id),
             )
             sub_comp = tk.Menu(menu, tearoff=0)
+            self._style_menu_widget(sub_comp, self.theme)
             self._populate_compound_menu_items(sub_comp, sname, pk)
             menu.add_cascade(label="🏷 Assign Compound", menu=sub_comp)
 
@@ -1927,10 +2504,12 @@ class OpenChromLabApp(tk.Tk):
 
             if p_left:
                 sub_l = tk.Menu(menu, tearoff=0)
+                self._style_menu_widget(sub_l, self.theme)
                 self._populate_compound_menu_items(sub_l, sname, p_left)
                 menu.add_cascade(label=f"🏷 Assign Left Peak ({lbl_left})", menu=sub_l)
             if p_right:
                 sub_r = tk.Menu(menu, tearoff=0)
+                self._style_menu_widget(sub_r, self.theme)
                 self._populate_compound_menu_items(sub_r, sname, p_right)
                 menu.add_cascade(label=f"🏷 Assign Right Peak ({lbl_right})", menu=sub_r)
         else:
@@ -1967,6 +2546,7 @@ class OpenChromLabApp(tk.Tk):
 
     def _context_action_adjust_anchors(self, peak_id: str) -> None:
         self.tool_var.set("drag_anchor")
+        self._refresh_segmented_button_styles()
         self.chrom_canvas.set_tool_mode("drag_anchor")
         self.chrom_canvas.select_peak(peak_id, zoom_to=False)
         self.status_var.set(f"Selected peak anchors for peak '{peak_id}'. Drag anchor handles on canvas.")

@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.agents/
+ORIGINAL_REQUEST.md
+PROJECT.md
+.pytest_cache/

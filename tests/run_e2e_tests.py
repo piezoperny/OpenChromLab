@@ -118,6 +118,7 @@ def main() -> int:
             ("Tier 1: OpenChromLab — R8 Method Custom Zoom Presets", "tests.tier1_features.test_openchromlab_r8_zoom_presets"),
             ("Tier 1: OpenChromLab — R9 Launcher Script & Application Icon", "tests.tier1_features.test_openchromlab_r9_launcher_icon"),
             ("Tier 1: OpenChromLab — R10 Curve Line Width & Timed Events", "tests.tier1_features.test_openchromlab_r10_curve_events"),
+            ("Tier 1: OpenChromLab — Upgrade Features F1-F12 (60 FPS, Dark Theme & 5-Frame ICO)", "tests.tier1_features.test_upgrade_features"),
         ],
         2: [
             ("Tier 2: Baseline Boundary & Corner Cases", "tests.tier2_boundaries.test_boundaries"),

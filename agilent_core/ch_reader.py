@@ -26,6 +26,216 @@ class ChromatogramSignal:
     values: List[float]          # Signal response array in detector units
     dt_sec: float                # Time step in seconds between consecutive points
     file_path: str = ""
+    _mipmaps: Dict[int, List[Tuple[float, float, int, int]]] = field(
+        default_factory=dict, init=False, repr=False, compare=False
+    )
+    _mipmap_len: int = field(default=-1, init=False, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        if self.values and len(self.values) >= 64:
+            self._ensure_mipmaps()
+
+    def _ensure_mipmaps(self) -> None:
+        """Build or refresh hierarchical min/max mipmap pyramid at strides B = 16, 64, 256."""
+        n = len(self.values)
+        if self._mipmap_len == n and self._mipmaps:
+            return
+        self._mipmaps = {}
+        self._mipmap_len = n
+        if n == 0:
+            return
+
+        y_arr = self.values
+        # Level 1: B = 16 from raw signal values
+        b16: List[Tuple[float, float, int, int]] = []
+        for start in range(0, n, 16):
+            end = min(n, start + 16)
+            sub = y_arr[start:end]
+            vmin = min(sub)
+            vmax = max(sub)
+            if vmin == vmax:
+                b16.append((vmin, vmax, start, start))
+            else:
+                imin = start + sub.index(vmin)
+                imax = start + sub.index(vmax)
+                b16.append((vmin, vmax, imin, imax))
+        self._mipmaps[16] = b16
+
+        # Level 2: B = 64 hierarchically from B = 16 (4 blocks per group)
+        b64: List[Tuple[float, float, int, int]] = []
+        n16 = len(b16)
+        for k in range(0, n16, 4):
+            grp = b16[k : min(n16, k + 4)]
+            vmin, _, imin, _ = min(grp, key=lambda x: x[0])
+            _, vmax, _, imax = max(grp, key=lambda x: x[1])
+            b64.append((vmin, vmax, imin, imax))
+        self._mipmaps[64] = b64
+
+        # Level 3: B = 256 hierarchically from B = 64 (4 blocks per group)
+        b256: List[Tuple[float, float, int, int]] = []
+        n64 = len(b64)
+        for k in range(0, n64, 4):
+            grp = b64[k : min(n64, k + 4)]
+            vmin, _, imin, _ = min(grp, key=lambda x: x[0])
+            _, vmax, _, imax = max(grp, key=lambda x: x[1])
+            b256.append((vmin, vmax, imin, imax))
+        self._mipmaps[256] = b256
+
+    def get_mipmap(self, block_size: int = 16) -> List[Tuple[float, float, int, int]]:
+        """Return pre-computed mipmap level for block_size in (16, 64, 256)."""
+        self._ensure_mipmaps()
+        return self._mipmaps.get(block_size, [])
+
+    def min_max_in_range(self, i0: int, i1: int) -> Tuple[float, float]:
+        """Fast O(range/256) exact min/max query over values[i0 : i1 + 1] using the mipmap pyramid."""
+        n = len(self.values)
+        if n == 0:
+            return (0.0, 0.0)
+        i0 = max(0, min(n - 1, i0))
+        i1 = max(0, min(n - 1, i1))
+        if i1 < i0:
+            i0, i1 = i1, i0
+        span = i1 - i0 + 1
+        y_arr = self.values
+        if span <= 64:
+            sub = y_arr[i0 : i1 + 1]
+            return (min(sub), max(sub))
+
+        self._ensure_mipmaps()
+        b16 = self._mipmaps.get(16)
+        b64 = self._mipmaps.get(64)
+        b256 = self._mipmaps.get(256)
+        if not b16:
+            sub = y_arr[i0 : i1 + 1]
+            return (min(sub), max(sub))
+
+        vmin = y_arr[i0]
+        vmax = vmin
+
+        # Align left boundary to 16-sample block boundary
+        first_b16 = (i0 + 15) >> 4
+        last_b16 = (i1 + 1) >> 4  # exclusive 16-block index
+
+        if first_b16 >= last_b16:
+            sub = y_arr[i0 : i1 + 1]
+            return (min(sub), max(sub))
+
+        # Left unaligned tail [i0, first_b16 * 16)
+        left_end = first_b16 << 4
+        if i0 < left_end:
+            sub_l = y_arr[i0:left_end]
+            lmin = min(sub_l)
+            lmax = max(sub_l)
+            if lmin < vmin:
+                vmin = lmin
+            if lmax > vmax:
+                vmax = lmax
+
+        # Right unaligned tail [last_b16 * 16, i1 + 1)
+        right_start = last_b16 << 4
+        if right_start <= i1:
+            sub_r = y_arr[right_start : i1 + 1]
+            rmin = min(sub_r)
+            rmax = max(sub_r)
+            if rmin < vmin:
+                vmin = rmin
+            if rmax > vmax:
+                vmax = rmax
+
+        # Traverse aligned [first_b16, last_b16) using 256 -> 64 -> 16 blocks
+        cur16 = first_b16
+        while cur16 < last_b16:
+            if b256 and (cur16 & 15) == 0 and cur16 + 16 <= last_b16:
+                blk = b256[cur16 >> 4]
+                if blk[0] < vmin:
+                    vmin = blk[0]
+                if blk[1] > vmax:
+                    vmax = blk[1]
+                cur16 += 16
+            elif b64 and (cur16 & 3) == 0 and cur16 + 4 <= last_b16:
+                blk = b64[cur16 >> 2]
+                if blk[0] < vmin:
+                    vmin = blk[0]
+                if blk[1] > vmax:
+                    vmax = blk[1]
+                cur16 += 4
+            else:
+                blk = b16[cur16]
+                if blk[0] < vmin:
+                    vmin = blk[0]
+                if blk[1] > vmax:
+                    vmax = blk[1]
+                cur16 += 1
+
+        return (vmin, vmax)
+
+    def get_decimated_envelope(
+        self, i0: int, i1: int, num_buckets: int
+    ) -> List[Tuple[float, float, int, int]]:
+        """
+        Extract (y_min, y_max, idx_min, idx_max) for `num_buckets` across [i0, i1]
+        using the multi-resolution mipmap pyramid when bucket step >= 16.
+        """
+        n = len(self.values)
+        if n == 0 or num_buckets <= 0:
+            return []
+        i0 = max(0, min(n - 1, i0))
+        i1 = max(0, min(n - 1, i1))
+        if i1 < i0:
+            return []
+
+        n_vis = i1 - i0 + 1
+        step = n_vis / num_buckets
+        y_arr = self.values
+
+        if step >= 16.0:
+            self._ensure_mipmaps()
+            if step >= 256.0:
+                B = 256
+                shift = 8
+            elif step >= 64.0:
+                B = 64
+                shift = 6
+            else:
+                B = 16
+                shift = 4
+            mip = self._mipmaps.get(B, [])
+            n_mip = len(mip)
+            out: List[Tuple[float, float, int, int]] = []
+            for col in range(num_buckets):
+                b_start = i0 + int(col * step)
+                b_end = min(i1, max(b_start, i0 + int((col + 1) * step) - 1))
+                m0 = b_start >> shift
+                m1 = min(n_mip - 1, b_end >> shift)
+                if m0 == m1:
+                    out.append(mip[m0])
+                else:
+                    vmin, vmax, imin, imax = mip[m0]
+                    for m in range(m0 + 1, m1 + 1):
+                        blk = mip[m]
+                        if blk[0] < vmin:
+                            vmin = blk[0]
+                            imin = blk[2]
+                        if blk[1] > vmax:
+                            vmax = blk[1]
+                            imax = blk[3]
+                    out.append((vmin, vmax, imin, imax))
+            return out
+
+        out_raw: List[Tuple[float, float, int, int]] = []
+        for col in range(num_buckets):
+            b_start = i0 + int(col * step)
+            b_end = min(i1, max(b_start, i0 + int((col + 1) * step) - 1))
+            sub = y_arr[b_start : b_end + 1]
+            vmin = min(sub)
+            vmax = max(sub)
+            if vmin == vmax:
+                out_raw.append((vmin, vmax, b_start, b_start))
+            else:
+                imin = b_start + sub.index(vmin)
+                imax = b_start + sub.index(vmax)
+                out_raw.append((vmin, vmax, imin, imax))
+        return out_raw
 
     def index_at_time(self, t_min: float) -> int:
         """Fast O(1) index lookup given uniform sampling with NaN/Inf protection."""

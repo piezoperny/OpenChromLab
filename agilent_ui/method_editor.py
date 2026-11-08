@@ -18,6 +18,7 @@ from agilent_core.method_model import (
     TimedEvent,
     build_default_mpz_method,
 )
+from agilent_ui.theme import DARK_PALETTE, LIGHT_PALETTE, ThemePalette
 
 
 class MethodEditorDialog(tk.Toplevel):
@@ -28,8 +29,11 @@ class MethodEditorDialog(tk.Toplevel):
         parent: Optional[tk.Widget] = None,
         method: Optional[ProcessingMethod] = None,
         on_method_saved: Optional[Callable[[ProcessingMethod], None]] = None,
+        theme: Optional[ThemePalette] = None,
     ) -> None:
         super().__init__(parent)
+        self.theme: ThemePalette = theme if theme is not None else getattr(parent, "theme", LIGHT_PALETTE)
+        self.configure(bg=self.theme.bg_app)
         self.title("Method Editor — OpenChromLab")
         self.geometry("980x680")
         self.minsize(850, 550)
@@ -64,15 +68,15 @@ class MethodEditorDialog(tk.Toplevel):
     # ------------------------------------------------------------------
 
     def _build_header_toolbar(self) -> None:
-        hdr_frame = tk.Frame(self, bg="#1F3864", padx=10, pady=8)
+        hdr_frame = tk.Frame(self, bg=self.theme.topbar_bg, padx=10, pady=8)
         hdr_frame.pack(side=tk.TOP, fill=tk.X)
 
         tk.Label(
             hdr_frame,
             text="Method Name:",
             font=("Segoe UI", 10, "bold"),
-            fg="#FFFFFF",
-            bg="#1F3864",
+            fg=self.theme.topbar_fg,
+            bg=self.theme.topbar_bg,
         ).pack(side=tk.LEFT, padx=(0, 6))
 
         self.method_name_var = tk.StringVar(value=self.method.name)
@@ -84,9 +88,14 @@ class MethodEditorDialog(tk.Toplevel):
             text="📄 New Method (Blank)",
             command=self._on_new_method,
             font=("Segoe UI", 9),
-            bg="#FFFFFF",
-            fg="#1F3864",
+            bg=self.theme.topbar_btn_bg,
+            fg=self.theme.topbar_btn_fg,
+            activebackground=self.theme.subbar_active_bg,
+            activeforeground="#FFFFFF",
             relief=tk.FLAT,
+            bd=0,
+            highlightthickness=1,
+            highlightbackground=self.theme.topbar_btn_border,
             padx=8,
             pady=2,
         ).pack(side=tk.LEFT, padx=3)
@@ -96,9 +105,14 @@ class MethodEditorDialog(tk.Toplevel):
             text="📂 Open JSON...",
             command=self._on_open_json,
             font=("Segoe UI", 9),
-            bg="#FFFFFF",
-            fg="#1F3864",
+            bg=self.theme.topbar_btn_bg,
+            fg=self.theme.topbar_btn_fg,
+            activebackground=self.theme.subbar_active_bg,
+            activeforeground="#FFFFFF",
             relief=tk.FLAT,
+            bd=0,
+            highlightthickness=1,
+            highlightbackground=self.theme.topbar_btn_border,
             padx=8,
             pady=2,
         ).pack(side=tk.LEFT, padx=3)
@@ -113,6 +127,7 @@ class MethodEditorDialog(tk.Toplevel):
             activebackground="#0B5C2E",
             activeforeground="#FFFFFF",
             relief=tk.FLAT,
+            bd=0,
             padx=10,
             pady=2,
         ).pack(side=tk.LEFT, padx=4)
@@ -122,9 +137,14 @@ class MethodEditorDialog(tk.Toplevel):
             text="💾 Save As...",
             command=self._on_save_as_method,
             font=("Segoe UI", 9),
-            bg="#FFFFFF",
-            fg="#1F3864",
+            bg=self.theme.topbar_btn_bg,
+            fg=self.theme.topbar_btn_fg,
+            activebackground=self.theme.subbar_active_bg,
+            activeforeground="#FFFFFF",
             relief=tk.FLAT,
+            bd=0,
+            highlightthickness=1,
+            highlightbackground=self.theme.topbar_btn_border,
             padx=8,
             pady=2,
         ).pack(side=tk.LEFT, padx=3)
@@ -661,7 +681,8 @@ class _CompoundEditSubDialog(tk.Toplevel):
         self.transient(parent)
         self.grab_set()
         self.resizable(False, False)
-        self.configure(padx=16, pady=12)
+        p_theme = getattr(parent, "theme", LIGHT_PALETTE)
+        self.configure(padx=16, pady=12, bg=p_theme.bg_frame)
 
         self.compound = compound
         self.result: Optional[CompoundDef] = None
@@ -750,7 +771,8 @@ class _TimedEventEditSubDialog(tk.Toplevel):
         self.transient(parent)
         self.grab_set()
         self.resizable(False, False)
-        self.configure(padx=16, pady=12)
+        p_theme = getattr(parent, "theme", LIGHT_PALETTE)
+        self.configure(padx=16, pady=12, bg=p_theme.bg_frame)
 
         self.event = event
         self.result: Optional[TimedEvent] = None

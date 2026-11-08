@@ -78,6 +78,8 @@ class DualChromatogramCanvas(tk.Frame):
         self._drag_state: Optional[dict] = None
         self._hover_anchor: Optional[Tuple[str, str, str]] = None  # (sig_name, peak_id, 'start'|'end')
         self._cursor_pos: Optional[Tuple[int, int]] = None
+        self._trace_cache: Dict[str, dict] = {}
+        self._last_cfg_size: Tuple[int, int] = (0, 0)
 
         # Layout margins (F10: margin_mid >= 46, margin_bottom >= 46 to eliminate FID1A tick / TCD2B title collisions)
         self.margin_left = 76
@@ -96,7 +98,7 @@ class DualChromatogramCanvas(tk.Frame):
         self.canvas.pack(fill=tk.BOTH, expand=True)
 
         # Bindings
-        self.canvas.bind("<Configure>", lambda e: self.redraw())
+        self.canvas.bind("<Configure>", self._on_canvas_configure)
         self.canvas.bind("<ButtonPress-1>", self._on_left_down)
         self.canvas.bind("<B1-Motion>", self._on_left_drag)
         self.canvas.bind("<ButtonRelease-1>", self._on_left_up)
@@ -107,6 +109,12 @@ class DualChromatogramCanvas(tk.Frame):
         self.canvas.bind("<ButtonPress-3>", self._on_right_down)
         self.canvas.bind("<B3-Motion>", self._on_right_drag)
         self.canvas.bind("<ButtonRelease-3>", self._on_right_up)
+
+    def _on_canvas_configure(self, event: tk.Event) -> None:
+        sz = (event.width, event.height)
+        if sz != self._last_cfg_size:
+            self._last_cfg_size = sz
+            self.redraw()
 
     # ------------------------------------------------------------------
     # Public API
@@ -147,6 +155,7 @@ class DualChromatogramCanvas(tk.Frame):
     ) -> None:
         self.injection = injection
         self.method = method
+        self._trace_cache.clear()
         if reset_view and injection is not None:
             self.zoom_active_region()
         else:
@@ -448,14 +457,12 @@ class DualChromatogramCanvas(tk.Frame):
         i1 = sig.index_at_time(t_max)
         if i1 <= i0:
             return
-        sub = sig.values[i0 : i1 + 1]
-        ymin = min(sub)
-        ymax = max(sub)
+        ymin, ymax = sig.min_max_in_range(i0, i1)
         if focus_peak is not None:
             p_y0 = min(focus_peak.baseline_start_y, focus_peak.baseline_end_y, ymin)
             if focus_peak.is_negative:
                 p_y1 = max(focus_peak.baseline_start_y, focus_peak.baseline_end_y) + focus_peak.height * 0.4
-                p_y0 = min(sub) - focus_peak.height * 0.25
+                p_y0 = ymin - focus_peak.height * 0.25
             else:
                 p_y1 = max(focus_peak.baseline_start_y, focus_peak.baseline_end_y) + focus_peak.height * 1.35
             ymin, ymax = p_y0, p_y1
@@ -487,7 +494,7 @@ class DualChromatogramCanvas(tk.Frame):
         return ticks
 
     # ------------------------------------------------------------------
-    # Rendering
+    # Rendering & Lightweight Tagged Overlays
     # ------------------------------------------------------------------
 
     def redraw(self) -> None:
@@ -496,46 +503,117 @@ class DualChromatogramCanvas(tk.Frame):
 
         rects = self._get_panel_rects()
         for sname, rect in rects.items():
-            self._draw_signal_panel(sname, rect)
+            self._draw_signal_panel(sname, rect, rects)
 
-        # Draw active tool banner or rubberband if dragging
-        if self._drag_state and self._drag_state.get("mode") in ("zoom_box", "draw_peak"):
-            sname = self._drag_state["sname"]
-            rect = rects.get(sname)
-            if rect:
-                x0_d, y0_d = self._drag_state["start_px"]
-                x1_d, y1_d = self._drag_state["cur_px"]
-                if self._drag_state["mode"] == "zoom_box":
-                    c.create_rectangle(
-                        x0_d, y0_d, x1_d, y1_d,
-                        outline=self.theme.zoom_box_line, dash=(4, 2), width=1.5
-                    )
-                elif self._drag_state["mode"] == "draw_peak":
-                    c.create_line(
-                        x0_d, y0_d, x1_d, y1_d,
-                        fill=self.theme.baseline_selected, width=2, dash=(4, 2)
-                    )
-                    c.create_oval(x0_d - 4, y0_d - 4, x0_d + 4, y0_d + 4, outline=self.theme.baseline_selected, fill=self.theme.canvas_bg, width=2)
-                    c.create_oval(x1_d - 4, y1_d - 4, x1_d + 4, y1_d + 4, outline=self.theme.baseline_selected, fill=self.theme.canvas_bg, width=2)
+        self._update_drag_overlay(rects=rects)
+        self._update_cursor_overlay(rects=rects)
 
-        # Split peak cursor preview
-        if self.tool_mode == "split_peak" and self._cursor_pos:
-            mx, my = self._cursor_pos
-            sname = self._panel_at_xy(mx, my)
-            if sname and sname in rects:
-                rx0, ry0, rx1, ry1 = rects[sname]
-                if rx0 <= mx <= rx1:
-                    c.create_line(mx, ry0, mx, ry1, fill=self.theme.baseline_selected, dash=(3, 3), width=1.5)
-                    t_cur, _ = self._px_to_data(sname, mx, my, rects[sname])
-                    c.create_text(
-                        mx + 6, ry0 + 14,
-                        text=f"Split @ {t_cur:.3f} min",
-                        anchor="w",
-                        font=("Segoe UI", 8, "bold"),
-                        fill=self.theme.baseline_selected,
-                    )
+    def _update_drag_overlay(self, rects: Optional[Dict[str, Tuple[int, int, int, int]]] = None) -> None:
+        """Fast (~0.5 ms) update of transient box-zoom or draw-peak rubberband overlay."""
+        c = self.canvas
+        c.delete("overlay_interactive")
+        if not self._drag_state or self._drag_state.get("mode") not in ("zoom_box", "draw_peak"):
+            return
+        if rects is None:
+            rects = self._get_panel_rects()
+        sname = self._drag_state["sname"]
+        rect = rects.get(sname)
+        if not rect:
+            return
+        x0_d, y0_d = self._drag_state["start_px"]
+        x1_d, y1_d = self._drag_state["cur_px"]
+        if self._drag_state["mode"] == "zoom_box":
+            c.create_rectangle(
+                x0_d, y0_d, x1_d, y1_d,
+                outline=self.theme.zoom_box_line, dash=(4, 2), width=1.5,
+                tags=("overlay_interactive",),
+            )
+        elif self._drag_state["mode"] == "draw_peak":
+            c.create_line(
+                x0_d, y0_d, x1_d, y1_d,
+                fill=self.theme.baseline_selected, width=2, dash=(4, 2),
+                tags=("overlay_interactive",),
+            )
+            c.create_oval(
+                x0_d - 4, y0_d - 4, x0_d + 4, y0_d + 4,
+                outline=self.theme.baseline_selected, fill=self.theme.canvas_bg, width=2,
+                tags=("overlay_interactive",),
+            )
+            c.create_oval(
+                x1_d - 4, y1_d - 4, x1_d + 4, y1_d + 4,
+                outline=self.theme.baseline_selected, fill=self.theme.canvas_bg, width=2,
+                tags=("overlay_interactive",),
+            )
 
-    def _draw_signal_panel(self, sname: str, rect: Tuple[int, int, int, int]) -> None:
+    def _update_cursor_overlay(self, rects: Optional[Dict[str, Tuple[int, int, int, int]]] = None) -> None:
+        """Fast (~0.5 ms) update of split-peak cursor preview line without c.delete('all')."""
+        c = self.canvas
+        c.delete("overlay_cursor")
+        if self.tool_mode != "split_peak" or not self._cursor_pos:
+            return
+        if rects is None:
+            rects = self._get_panel_rects()
+        mx, my = self._cursor_pos
+        sname = self._panel_at_xy(mx, my)
+        if sname and sname in rects:
+            rx0, ry0, rx1, ry1 = rects[sname]
+            if rx0 <= mx <= rx1:
+                c.create_line(
+                    mx, ry0, mx, ry1,
+                    fill=self.theme.baseline_selected, dash=(3, 3), width=1.5,
+                    tags=("overlay_cursor",),
+                )
+                t_cur, _ = self._px_to_data(sname, mx, my, rects[sname])
+                c.create_text(
+                    mx + 6, ry0 + 14,
+                    text=f"Split @ {t_cur:.3f} min",
+                    anchor="w",
+                    font=("Segoe UI", 8, "bold"),
+                    fill=self.theme.baseline_selected,
+                    tags=("overlay_cursor",),
+                )
+
+    def _update_anchor_hover_item(
+        self,
+        anc: Optional[Tuple[str, str, str]],
+        is_hovered: bool,
+        rects: Optional[Dict[str, Tuple[int, int, int, int]]] = None,
+    ) -> None:
+        """Update a single anchor handle oval in-place via tag without redrawing the canvas."""
+        if anc is None or not self.injection:
+            return
+        sname, pk_id, end_kind = anc
+        tag = f"anchor_{sname}_{pk_id}_{end_kind}"
+        c = self.canvas
+        items = c.find_withtag(tag)
+        if not items:
+            return
+        if rects is None:
+            rects = self._get_panel_rects()
+        rect = rects.get(sname)
+        if not rect:
+            return
+        pks = self.injection.peaks_by_signal.get(sname, [])
+        pk = next((p for p in pks if p.peak_id == pk_id), None)
+        if not pk:
+            return
+        t_anc = pk.begin_min if end_kind == "start" else pk.end_min
+        y_anc = pk.baseline_start_y if end_kind == "start" else pk.baseline_end_y
+        px_a, py_a = self._data_to_px(sname, t_anc, y_anc, rect)
+        is_sel = (pk.peak_id == self.selected_peak_id)
+        r = 5 if (is_hovered or is_sel or self.tool_mode == "drag_anchor") else 3
+        fill_c = self.theme.baseline_selected if is_hovered else (self.theme.anchor_selected if is_sel else self.theme.anchor_fill)
+        out_c = self.theme.baseline_selected if (is_hovered or is_sel) else self.theme.anchor_outline
+        for item_id in items:
+            c.coords(item_id, px_a - r, py_a - r, px_a + r, py_a + r)
+            c.itemconfigure(item_id, fill=fill_c, outline=out_c)
+
+    def _draw_signal_panel(
+        self,
+        sname: str,
+        rect: Tuple[int, int, int, int],
+        all_rects: Optional[Dict[str, Tuple[int, int, int, int]]] = None,
+    ) -> None:
         c = self.canvas
         x0, y0, x1, y1 = rect
         pw = max(1, x1 - x0)
@@ -550,6 +628,26 @@ class DualChromatogramCanvas(tk.Frame):
 
         tx0, tx1 = self.x_range
         ty0, ty1 = self.y_ranges.get(sname, (0.0, 100.0))
+
+        # 1a. Subtle Compound RT Window Column Bands in Dark Mode (drawn behind grid lines)
+        if self.show_rt_windows.get() and self.method and self.theme.name == "dark":
+            band_fill = getattr(self.theme, "rt_window_band_fill", "#152232")
+            for comp in self.method.compounds:
+                if comp.signal.upper() != sname.upper():
+                    continue
+                w0, w1 = comp.window_range
+                if w1 < tx0 or w0 > tx1:
+                    continue
+                is_hi = (self.highlighted_compound is not None and self.highlighted_compound.name == comp.name)
+                if not is_hi:
+                    px0, _ = self._data_to_px(sname, max(tx0, w0), ty0, rect)
+                    px1, _ = self._data_to_px(sname, min(tx1, w1), ty0, rect)
+                    if px1 - px0 >= 1.0:
+                        c.create_rectangle(
+                            px0, y0 + 1, px1, y1 - 1,
+                            fill=band_fill, outline="",
+                            tags=("rt_window_band", f"rt_band_{sname}"),
+                        )
 
         # Grid & X-axis ticks
         x_ticks = self._nice_ticks(tx0, tx1, target_count=max(4, pw // 110))
@@ -584,7 +682,7 @@ class DualChromatogramCanvas(tk.Frame):
         # Panel header title (like OpenLab: "MPZHY14_reaction_261015--126F.D - FID1 A, Front Signal")
         title_prefix = f"{self.injection.folder_name}  —  " if self.injection else ""
         sig_desc = sig.description if sig else sname
-        unit_label = f"Response [{sig.units}]" if sig else "Response"
+        unit_label = f"Response [{sig.units}]" if (sig and sig.units) else "Response [pA]"
         c.create_text(
             x0 + 6, y0 - 14,
             text=f"{title_prefix}{sig_desc}   ({unit_label})",
@@ -593,7 +691,32 @@ class DualChromatogramCanvas(tk.Frame):
             fill=self.theme.panel_title,
         )
 
-        rects = self._get_panel_rects()
+        # Vertical rotated Y-axis title on left margin ("Response [pA]") matching UPGRADE
+        y_title_x = max(14, x0 - 52)
+        y_title_y = (y0 + y1) * 0.5
+        try:
+            c.create_text(
+                y_title_x,
+                y_title_y,
+                text=unit_label,
+                anchor="center",
+                angle=90,
+                font=("Segoe UI", 8, "bold"),
+                fill=self.theme.axis_title,
+                tags=("y_axis_title",),
+            )
+        except tk.TclError:
+            c.create_text(
+                y_title_x,
+                y_title_y,
+                text="pA" if "pA" in unit_label else "Resp",
+                anchor="center",
+                font=("Segoe UI", 8, "bold"),
+                fill=self.theme.axis_title,
+                tags=("y_axis_title",),
+            )
+
+        rects = all_rects if all_rects is not None else self._get_panel_rects()
         is_bottom_panel = (sname == list(rects.keys())[-1])
         if is_bottom_panel:
             c.create_text(
@@ -613,7 +736,7 @@ class DualChromatogramCanvas(tk.Frame):
             )
             return
 
-        # 1. Draw Compound Identification RT Windows (vertical dashed bands)
+        # 1b. Draw Compound Identification RT Windows (vertical dashed boundary lines)
         if self.show_rt_windows.get() and self.method:
             for comp in self.method.compounds:
                 if comp.signal.upper() != sname.upper():
@@ -635,24 +758,10 @@ class DualChromatogramCanvas(tk.Frame):
                     if tx0 <= w1 <= tx1:
                         c.create_line(px1, y0, px1, y1, fill=self.theme.rt_window_line, dash=(2, 4), width=1)
 
-        # 2. Draw Timed Integration Events (Integration ON/OFF, BaselineNow)
-        if self.show_timed_events.get() and self.method and sname in self.method.signals:
-            sig_cfg = self.method.signals[sname]
-            for ev in sig_cfg.timed_events:
-                if not ev.enabled or not (tx0 <= ev.time_min <= tx1):
-                    continue
-                px, _ = self._data_to_px(sname, ev.time_min, ty0, rect)
-                if ev.event_type == "IntegrationOn":
-                    c.create_line(px, y0, px, y1, fill=self.theme.timed_event_on, dash=(4, 3), width=1)
-                    c.create_text(px + 3, y1 - 12, text="[ Int ON", anchor="w", font=("Segoe UI", 7, "bold"), fill=self.theme.timed_event_on)
-                elif ev.event_type == "IntegrationOff":
-                    c.create_line(px, y0, px, y1, fill=self.theme.timed_event_off, dash=(4, 3), width=1)
-                    c.create_text(px - 3, y1 - 12, text="Int OFF ]", anchor="e", font=("Segoe UI", 7, "bold"), fill=self.theme.timed_event_off)
-                elif ev.event_type == "BaselineNow":
-                    c.create_line(px, y0, px, y1, fill=self.theme.timed_event_bl, dash=(2, 3), width=1)
-                    c.create_text(px, y1 - 22, text="▼BL", anchor="center", font=("Segoe UI", 7), fill=self.theme.timed_event_bl)
+        # 2. Draw Chromatogram Trace (with soft under-curve fill & glow)
+        self._draw_chromatogram_trace(sig, rect)
 
-        # 3. Draw Integrated Peaks (shaded area for selected peak + baselines + anchors)
+        # 3. Draw Integrated Peaks (shaded area for selected peak + baselines + drop lines)
         peaks = self.injection.peaks_by_signal.get(sname, []) if self.injection else []
         if self.show_baselines.get():
             for pk in peaks:
@@ -661,8 +770,69 @@ class DualChromatogramCanvas(tk.Frame):
                 is_sel = (pk.peak_id == self.selected_peak_id)
                 self._draw_peak_baseline_and_fill(sig, pk, rect, is_sel)
 
-        # 4. Draw Chromatogram Trace using fast pixel-column min/max decimation
-        self._draw_chromatogram_trace(sig, rect)
+        # 4. Draw Timed Integration Events (Integration ON/OFF pill badges, BaselineNow)
+        if self.show_timed_events.get() and self.method and sname in self.method.signals:
+            sig_cfg = self.method.signals[sname]
+            pill_boxes: List[Tuple[float, float]] = []
+            for ev in sig_cfg.timed_events:
+                if not ev.enabled or not (tx0 <= ev.time_min <= tx1):
+                    continue
+                px, _ = self._data_to_px(sname, ev.time_min, ty0, rect)
+                if ev.event_type == "IntegrationOn":
+                    c.create_line(px, y0, px, y1, fill=self.theme.timed_event_on, dash=(4, 3), width=1)
+                    pill_w, pill_h = 46.0, 14.0
+                    bx0 = max(x0 + 2.0, min(x1 - pill_w - 2.0, px + 2.0))
+                    bx1 = bx0 + pill_w
+                    row_tier = 0
+                    for ox0, ox1 in pill_boxes:
+                        if not (bx1 < ox0 - 2 or bx0 > ox1 + 2):
+                            row_tier += 1
+                    pill_boxes.append((bx0, bx1))
+                    by1 = y1 - 3.0 - row_tier * (pill_h + 2.0)
+                    by0 = by1 - pill_h
+                    pill_bg = getattr(self.theme, "event_on_pill_bg", "#132E28")
+                    pill_bd = getattr(self.theme, "event_on_pill_border", self.theme.timed_event_on)
+                    c.create_rectangle(
+                        bx0, by0, bx1, by1,
+                        fill=pill_bg, outline=pill_bd, width=1,
+                        tags=("timed_event_badge",),
+                    )
+                    c.create_text(
+                        (bx0 + bx1) * 0.5, (by0 + by1) * 0.5,
+                        text="[ Int ON",
+                        anchor="center",
+                        font=("Segoe UI", 7, "bold"),
+                        fill=self.theme.timed_event_on,
+                    )
+                elif ev.event_type == "IntegrationOff":
+                    c.create_line(px, y0, px, y1, fill=self.theme.timed_event_off, dash=(4, 3), width=1)
+                    pill_w, pill_h = 48.0, 14.0
+                    bx1 = min(x1 - 2.0, max(x0 + pill_w + 2.0, px - 2.0))
+                    bx0 = bx1 - pill_w
+                    row_tier = 0
+                    for ox0, ox1 in pill_boxes:
+                        if not (bx1 < ox0 - 2 or bx0 > ox1 + 2):
+                            row_tier += 1
+                    pill_boxes.append((bx0, bx1))
+                    by1 = y1 - 3.0 - row_tier * (pill_h + 2.0)
+                    by0 = by1 - pill_h
+                    pill_bg = getattr(self.theme, "event_off_pill_bg", "#311B22")
+                    pill_bd = getattr(self.theme, "event_off_pill_border", self.theme.timed_event_off)
+                    c.create_rectangle(
+                        bx0, by0, bx1, by1,
+                        fill=pill_bg, outline=pill_bd, width=1,
+                        tags=("timed_event_badge",),
+                    )
+                    c.create_text(
+                        (bx0 + bx1) * 0.5, (by0 + by1) * 0.5,
+                        text="Int OFF ]",
+                        anchor="center",
+                        font=("Segoe UI", 7, "bold"),
+                        fill=self.theme.timed_event_off,
+                    )
+                elif ev.event_type == "BaselineNow":
+                    c.create_line(px, y0, px, y1, fill=self.theme.timed_event_bl, dash=(2, 3), width=1)
+                    c.create_text(px, y1 - 22, text="▼BL", anchor="center", font=("Segoe UI", 7), fill=self.theme.timed_event_bl)
 
         # 5. Draw Peak Labels & Anchor Handles on top of trace
         self._draw_peak_labels_and_handles(sig, peaks, rect)
@@ -673,8 +843,19 @@ class DualChromatogramCanvas(tk.Frame):
         tx0, tx1 = self.x_range
         ty0, ty1 = self.y_ranges.get(sig.name, (0.0, 100.0))
 
-        i0 = sig.index_at_time(tx0)
-        i1 = sig.index_at_time(tx1)
+        t_arr = sig.time_min
+        y_arr = sig.values
+        if not t_arr or not y_arr:
+            return
+
+        # Clamp visible time window to the signal's actual time domain (fixes out-of-bounds stretching bug)
+        vis_t0 = max(tx0, t_arr[0])
+        vis_t1 = min(tx1, t_arr[-1])
+        if vis_t1 <= vis_t0:
+            return
+
+        i0 = sig.index_at_time(vis_t0)
+        i1 = sig.index_at_time(vis_t1)
         if i1 <= i0:
             return
 
@@ -683,39 +864,148 @@ class DualChromatogramCanvas(tk.Frame):
         dx = max(tx1 - tx0, 1e-9)
         dy = max(ty1 - ty0, 1e-9)
         ph = y1 - y0
+        scale_y = ph / dy
+
+        px_start_f = x0 + (t_arr[i0] - tx0) / dx * pw
+        px_end_f = x0 + (t_arr[i1] - tx0) / dx * pw
+        px_start = max(x0, min(x1, int(round(px_start_f))))
+        px_end = max(x0, min(x1, int(round(px_end_f))))
+        vis_pw = max(1, px_end - px_start)
+
+        # Check X-decimation cache so Y-only pan/scale skips bucket extraction
+        cache_key = (id(y_arr), len(y_arr), tx0, tx1, x0, x1, i0, i1, vis_pw)
+        cached = self._trace_cache.get(sig.name)
+        if cached is not None and cached.get("key") == cache_key:
+            mode_c = cached["mode"]
+            data_c = cached["data"]
+        else:
+            if n_vis <= vis_pw * 2:
+                mode_c = "raw"
+                scale_x = pw / dx
+                raw_pts: List[Tuple[float, float]] = [
+                    (x0 + (t_arr[idx] - tx0) * scale_x, y_arr[idx])
+                    for idx in range(i0, i1 + 1)
+                ]
+                data_c = raw_pts
+            else:
+                mode_c = "env"
+                # Cap bucket count to <= 450 so vertex count stays < 1,000 with ample 60 FPS headroom
+                n_buckets = min(vis_pw, 450)
+                env = sig.get_decimated_envelope(i0, i1, n_buckets)
+                b_step_px = (px_end_f - px_start_f) / max(1, n_buckets)
+                env_pts: List[Tuple[float, float, float, bool]] = []
+                for col, (vmin, vmax, imin, imax) in enumerate(env):
+                    px_c = px_start_f + (col + 0.5) * b_step_px
+                    if px_c < x0:
+                        px_c = float(x0)
+                    elif px_c > x1:
+                        px_c = float(x1)
+                    env_pts.append((px_c, vmin, vmax, imin <= imax))
+                data_c = env_pts
+            self._trace_cache[sig.name] = {"key": cache_key, "mode": mode_c, "data": data_c}
 
         coords: List[float] = []
-        t_arr = sig.time_min
-        y_arr = sig.values
+        upper_env_coords: List[float] = []
 
-        if n_vis <= pw * 2:
-            for idx in range(i0, i1 + 1):
-                px = x0 + (t_arr[idx] - tx0) / dx * pw
-                py = y1 - (y_arr[idx] - ty0) / dy * ph
-                py_clamped = max(y0, min(y1, py))
-                coords.extend((px, py_clamped))
+        if mode_c == "raw":
+            raw_list = data_c
+            env_stride = max(1, len(raw_list) // 220)
+            for k, (px, y_v) in enumerate(raw_list):
+                py = y1 - (y_v - ty0) * scale_y
+                if py < y0:
+                    py = float(y0)
+                elif py > y1:
+                    py = float(y1)
+                if len(coords) >= 4 and abs(py - coords[-1]) <= 0.30 and abs(coords[-1] - coords[-3]) <= 0.30:
+                    coords[-2] = px
+                    coords[-1] = py
+                else:
+                    coords.extend((px, py))
+                if k % env_stride == 0 or k == len(raw_list) - 1:
+                    upper_env_coords.extend((px, py))
         else:
-            # Min/Max decimation per horizontal pixel bucket
-            step = n_vis / pw
-            for col in range(pw):
-                b_start = i0 + int(col * step)
-                b_end = min(i1, i0 + int((col + 1) * step))
-                if b_end < b_start:
-                    b_end = b_start
-                sub_y = y_arr[b_start : b_end + 1]
-                y_min_b = min(sub_y)
-                y_max_b = max(sub_y)
-                px = x0 + col
-                py_first = y1 - (sub_y[0] - ty0) / dy * ph
-                py_min = y1 - (y_min_b - ty0) / dy * ph
-                py_max = y1 - (y_max_b - ty0) / dy * ph
-                py_last = y1 - (sub_y[-1] - ty0) / dy * ph
-                for py_val in (py_first, py_max, py_min, py_last):
-                    coords.extend((px, max(y0, min(y1, py_val))))
+            env_list = data_c
+            env_stride = max(1, len(env_list) // 220)
+            # Always anchor exact first visible sample
+            y_first = y_arr[i0]
+            py_f = max(float(y0), min(float(y1), y1 - (y_first - ty0) * scale_y))
+            px_f = max(float(x0), min(float(x1), px_start_f))
+            coords.extend((px_f, py_f))
+            upper_env_coords.extend((px_f, py_f))
+
+            for k, (px, vmin, vmax, min_first) in enumerate(env_list):
+                py_min_val = y1 - (vmin - ty0) * scale_y  # lower signal value -> larger canvas Y
+                py_max_val = y1 - (vmax - ty0) * scale_y  # higher signal value -> smaller canvas Y
+                if py_min_val < y0:
+                    py_min_val = float(y0)
+                elif py_min_val > y1:
+                    py_min_val = float(y1)
+                if py_max_val < y0:
+                    py_max_val = float(y0)
+                elif py_max_val > y1:
+                    py_max_val = float(y1)
+
+                if abs(py_min_val - py_max_val) <= 0.75:
+                    py_mid = 0.5 * (py_min_val + py_max_val)
+                    if len(coords) >= 4 and abs(py_mid - coords[-1]) <= 0.35 and abs(coords[-1] - coords[-3]) <= 0.35:
+                        coords[-2] = px
+                        coords[-1] = py_mid
+                    else:
+                        coords.extend((px, py_mid))
+                else:
+                    if min_first:
+                        coords.extend((px, py_min_val, px, py_max_val))
+                    else:
+                        coords.extend((px, py_max_val, px, py_min_val))
+
+                if k % env_stride == 0 or k == len(env_list) - 1:
+                    upper_env_coords.extend((px, py_max_val))
+
+            # Always anchor exact last visible sample
+            y_last = y_arr[i1]
+            py_l = max(float(y0), min(float(y1), y1 - (y_last - ty0) * scale_y))
+            px_l = max(float(x0), min(float(x1), px_end_f))
+            if abs(px_l - coords[-2]) > 0.2 or abs(py_l - coords[-1]) > 0.2:
+                coords.extend((px_l, py_l))
+            upper_env_coords.extend((px_l, py_l))
 
         if len(coords) >= 4:
+            # 1. Under-curve soft area fill polygon (UPGRADE visual feature)
+            if len(upper_env_coords) >= 4 and self.theme.name == "dark":
+                under_fill = getattr(self.theme, "trace_under_fill", self.theme.shaded_pos_fill)
+                base_y = float(y1 - 1)
+                poly_coords: List[float] = [
+                    upper_env_coords[0],
+                    base_y,
+                    *upper_env_coords,
+                    upper_env_coords[-2],
+                    base_y,
+                ]
+                c.create_polygon(
+                    *poly_coords,
+                    fill=under_fill,
+                    outline="",
+                    tags=("trace_under_fill", f"trace_fill_{sig.name}"),
+                )
+
             trace_color = self.theme.trace_fid if sig.name == "FID1A" else self.theme.trace_tcd
-            c.create_line(*coords, fill=trace_color, width=self.trace_line_width)
+            # 2. Luminous outer glow halo in dark mode when vertex count is compact
+            if self.theme.name == "dark" and len(coords) <= 2400:
+                glow_color = getattr(self.theme, "trace_glow", "#1E3A5F")
+                c.create_line(
+                    *coords,
+                    fill=glow_color,
+                    width=self.trace_line_width + 2.0,
+                    tags=("chromatogram_glow", f"glow_{sig.name}"),
+                )
+
+            # 3. Crisp core chromatogram trace line
+            c.create_line(
+                *coords,
+                fill=trace_color,
+                width=self.trace_line_width,
+                tags=("chromatogram_trace", f"trace_{sig.name}"),
+            )
 
     def _draw_peak_baseline_and_fill(
         self,
@@ -803,7 +1093,7 @@ class DualChromatogramCanvas(tk.Frame):
         for pk in peaks:
             is_sel = (pk.peak_id == self.selected_peak_id)
 
-            # Draw draggable anchor circles
+            # Draw draggable anchor circles with per-anchor tags for O(1) hover updates
             for end_kind, t_anc, y_anc in (
                 ("start", pk.begin_min, pk.baseline_start_y),
                 ("end", pk.end_min, pk.baseline_end_y),
@@ -816,7 +1106,8 @@ class DualChromatogramCanvas(tk.Frame):
                     out_c = self.theme.baseline_selected if (is_hov or is_sel) else self.theme.anchor_outline
                     c.create_oval(
                         px_a - r, py_a - r, px_a + r, py_a + r,
-                        fill=fill_c, outline=out_c, width=1.5
+                        fill=fill_c, outline=out_c, width=1.5,
+                        tags=("anchor_handle", f"anchor_{sig.name}_{pk.peak_id}_{end_kind}"),
                     )
 
         if not self.show_compound_labels.get():
@@ -985,7 +1276,7 @@ class DualChromatogramCanvas(tk.Frame):
                         fill=self.theme.leader_line, dash=(2, 2), width=1
                     )
 
-                tid = c.create_text(
+                c.create_text(
                     fin_cx, fin_cy,
                     text=lbl_text,
                     anchor="s",
@@ -993,8 +1284,7 @@ class DualChromatogramCanvas(tk.Frame):
                     font=lbl_font,
                     fill=lbl_color,
                 )
-                real_bb = c.bbox(tid)
-                f_box = real_bb if real_bb else (f_bx0, f_by0, f_bx1, f_by1)
+                f_box = (f_bx0, f_by0, f_bx1, f_by1)
                 b_min = int(f_box[0] // bin_size)
                 b_max = int(f_box[2] // bin_size)
                 for b in range(b_min, b_max + 1):
@@ -1068,8 +1358,15 @@ class DualChromatogramCanvas(tk.Frame):
         self._cursor_pos = (event.x, event.y)
         prev_hov = self._hover_anchor
         self._hover_anchor = self._find_nearest_anchor(event.x, event.y)
-        if self._hover_anchor != prev_hov or self.tool_mode == "split_peak":
-            self.redraw()
+        rects: Optional[Dict[str, Tuple[int, int, int, int]]] = None
+        if self._hover_anchor != prev_hov:
+            rects = self._get_panel_rects()
+            self._update_anchor_hover_item(prev_hov, False, rects=rects)
+            self._update_anchor_hover_item(self._hover_anchor, True, rects=rects)
+        if self.tool_mode == "split_peak":
+            if rects is None:
+                rects = self._get_panel_rects()
+            self._update_cursor_overlay(rects=rects)
 
     def _on_left_down(self, event: tk.Event) -> None:
         if not self.injection:
@@ -1127,6 +1424,7 @@ class DualChromatogramCanvas(tk.Frame):
                     "start_px": (px0, py0),
                     "cur_px": (event.x, event.y),
                 }
+                self._update_drag_overlay(rects=rects)
             return
 
         # 4. Standard Left-Click navigation modes (Feature F21 / R3):
@@ -1179,7 +1477,7 @@ class DualChromatogramCanvas(tk.Frame):
                 "start_px": (event.x, event.y),
                 "cur_px": (event.x, event.y),
             }
-        self.redraw()
+            self._update_drag_overlay(rects=rects)
 
     def _on_left_drag(self, event: tk.Event) -> None:
         if not self._drag_state or not self.injection:
@@ -1218,11 +1516,11 @@ class DualChromatogramCanvas(tk.Frame):
             cx = max(rect[0], min(rect[2], event.x))
             cy = max(rect[1], min(rect[3], event.y))
             self._drag_state["cur_px"] = (cx, cy)
-            self.redraw()
+            self._update_drag_overlay(rects=rects)
 
         elif mode == "draw_peak":
             self._drag_state["cur_px"] = (event.x, event.y)
-            self.redraw()
+            self._update_drag_overlay(rects=rects)
 
         elif mode == "pan":
             x0, y0, x1, y1 = rect
