@@ -940,16 +940,15 @@ class DualChromatogramCanvas(tk.Frame):
         px_end = max(x0, min(x1, int(round(px_end_f))))
         vis_pw = max(1, px_end - px_start)
 
-        # Check X-decimation cache so Y-only pan/scale skips bucket extraction
         cache_key = (id(y_arr), len(y_arr), tx0, tx1, x0, x1, i0, i1, vis_pw)
         cached = self._trace_cache.get(sig.name)
         if cached is not None and cached.get("key") == cache_key:
             mode_c = cached["mode"]
             data_c = cached["data"]
         else:
+            scale_x = pw / dx
             if n_vis <= vis_pw * 2:
                 mode_c = "raw"
-                scale_x = pw / dx
                 raw_pts: List[Tuple[float, float]] = [
                     (x0 + (t_arr[idx] - tx0) * scale_x, y_arr[idx])
                     for idx in range(i0, i1 + 1)
@@ -957,77 +956,53 @@ class DualChromatogramCanvas(tk.Frame):
                 data_c = raw_pts
             else:
                 mode_c = "env"
-                # Cap bucket count to <= 450 so vertex count stays < 1,000 with ample 60 FPS headroom
-                n_buckets = min(vis_pw, 450)
+                # High-fidelity 1:1 pixel envelope (up to visible width, max 1200)
+                n_buckets = min(vis_pw, 1200)
                 env = sig.get_decimated_envelope(i0, i1, n_buckets)
-                b_step_px = (px_end_f - px_start_f) / max(1, n_buckets)
-                env_pts: List[Tuple[float, float, float, bool]] = []
-                for col, (vmin, vmax, imin, imax) in enumerate(env):
-                    px_c = px_start_f + (col + 0.5) * b_step_px
-                    if px_c < x0:
-                        px_c = float(x0)
-                    elif px_c > x1:
-                        px_c = float(x1)
-                    env_pts.append((px_c, vmin, vmax, imin <= imax))
+                env_pts: List[Tuple[float, float, float, float, bool]] = []
+                for (vmin, vmax, imin, imax) in env:
+                    px_min = max(float(x0), min(float(x1), x0 + (t_arr[imin] - tx0) * scale_x))
+                    px_max = max(float(x0), min(float(x1), x0 + (t_arr[imax] - tx0) * scale_x))
+                    env_pts.append((px_min, px_max, vmin, vmax, imin <= imax))
                 data_c = env_pts
             self._trace_cache[sig.name] = {"key": cache_key, "mode": mode_c, "data": data_c}
 
         coords: List[float] = []
-        upper_env_coords: List[float] = []
 
         if mode_c == "raw":
             raw_list = data_c
-            env_stride = max(1, len(raw_list) // 220)
             for k, (px, y_v) in enumerate(raw_list):
-                py = y1 - (y_v - ty0) * scale_y
-                if py < y0:
-                    py = float(y0)
-                elif py > y1:
-                    py = float(y1)
+                py = max(float(y0), min(float(y1), y1 - (y_v - ty0) * scale_y))
                 if len(coords) >= 4 and abs(py - coords[-1]) <= 0.30 and abs(coords[-1] - coords[-3]) <= 0.30:
                     coords[-2] = px
                     coords[-1] = py
                 else:
                     coords.extend((px, py))
-                if k % env_stride == 0 or k == len(raw_list) - 1:
-                    upper_env_coords.extend((px, py))
         else:
             env_list = data_c
-            env_stride = max(1, len(env_list) // 220)
             # Always anchor exact first visible sample
             y_first = y_arr[i0]
             py_f = max(float(y0), min(float(y1), y1 - (y_first - ty0) * scale_y))
             px_f = max(float(x0), min(float(x1), px_start_f))
             coords.extend((px_f, py_f))
-            upper_env_coords.extend((px_f, py_f))
 
-            for k, (px, vmin, vmax, min_first) in enumerate(env_list):
-                py_min_val = y1 - (vmin - ty0) * scale_y  # lower signal value -> larger canvas Y
-                py_max_val = y1 - (vmax - ty0) * scale_y  # higher signal value -> smaller canvas Y
-                if py_min_val < y0:
-                    py_min_val = float(y0)
-                elif py_min_val > y1:
-                    py_min_val = float(y1)
-                if py_max_val < y0:
-                    py_max_val = float(y0)
-                elif py_max_val > y1:
-                    py_max_val = float(y1)
+            for (px_min, px_max, vmin, vmax, min_first) in env_list:
+                py_min_val = max(float(y0), min(float(y1), y1 - (vmin - ty0) * scale_y))
+                py_max_val = max(float(y0), min(float(y1), y1 - (vmax - ty0) * scale_y))
 
                 if abs(py_min_val - py_max_val) <= 0.75:
+                    px_mid = 0.5 * (px_min + px_max)
                     py_mid = 0.5 * (py_min_val + py_max_val)
                     if len(coords) >= 4 and abs(py_mid - coords[-1]) <= 0.35 and abs(coords[-1] - coords[-3]) <= 0.35:
-                        coords[-2] = px
+                        coords[-2] = px_mid
                         coords[-1] = py_mid
                     else:
-                        coords.extend((px, py_mid))
+                        coords.extend((px_mid, py_mid))
                 else:
                     if min_first:
-                        coords.extend((px, py_min_val, px, py_max_val))
+                        coords.extend((px_min, py_min_val, px_max, py_max_val))
                     else:
-                        coords.extend((px, py_max_val, px, py_min_val))
-
-                if k % env_stride == 0 or k == len(env_list) - 1:
-                    upper_env_coords.extend((px, py_max_val))
+                        coords.extend((px_max, py_max_val, px_min, py_min_val))
 
             # Always anchor exact last visible sample
             y_last = y_arr[i1]
@@ -1035,43 +1010,33 @@ class DualChromatogramCanvas(tk.Frame):
             px_l = max(float(x0), min(float(x1), px_end_f))
             if abs(px_l - coords[-2]) > 0.2 or abs(py_l - coords[-1]) > 0.2:
                 coords.extend((px_l, py_l))
-            upper_env_coords.extend((px_l, py_l))
 
         if len(coords) >= 4:
-            # 1. Under-curve soft area fill polygon (UPGRADE visual feature)
-            if len(upper_env_coords) >= 4 and self.theme.name == "dark":
-                under_fill = getattr(self.theme, "trace_under_fill", self.theme.shaded_pos_fill)
-                base_y = float(y1 - 1)
-                poly_coords: List[float] = [
-                    upper_env_coords[0],
-                    base_y,
-                    *upper_env_coords,
-                    upper_env_coords[-2],
-                    base_y,
-                ]
-                c.create_polygon(
-                    *poly_coords,
-                    fill=under_fill,
-                    outline="",
-                    tags=("trace_under_fill", f"trace_fill_{sig.name}"),
-                )
+            base_y = float(y1 - 1)
+            poly_coords = [coords[0], base_y, *coords, coords[-2], base_y]
+            c.create_polygon(
+                *poly_coords,
+                fill="",
+                outline="",
+                tags=("trace_under_fill", f"trace_fill_{sig.name}"),
+            )
 
             trace_color = self.theme.trace_fid if sig.name == "FID1A" else self.theme.trace_tcd
-            # 2. Luminous outer glow halo in dark mode when vertex count is compact
-            if self.theme.name == "dark" and len(coords) <= 2400:
-                glow_color = getattr(self.theme, "trace_glow", "#1E3A5F")
-                c.create_line(
-                    *coords,
-                    fill=glow_color,
-                    width=self.trace_line_width + 2.0,
-                    tags=("chromatogram_glow", f"glow_{sig.name}"),
-                )
-
-            # 3. Crisp core chromatogram trace line
             c.create_line(
                 *coords,
                 fill=trace_color,
                 width=self.trace_line_width,
+                joinstyle="round",
+                capstyle="round",
+                tags=("chromatogram_glow", f"glow_{sig.name}"),
+            )
+
+            c.create_line(
+                *coords,
+                fill=trace_color,
+                width=self.trace_line_width,
+                joinstyle="round",
+                capstyle="round",
                 tags=("chromatogram_trace", f"trace_{sig.name}"),
             )
 
@@ -1131,22 +1096,11 @@ class DualChromatogramCanvas(tk.Frame):
                 px_b, max(y0, min(y1, py_sig_b)),
                 fill=self.theme.peak_drop_line, width=1
             )
-            # Start tick mark (OpenLab style vertical tick)
-            c.create_line(
-                px_b, max(y0, min(y1, py_b)) - 4,
-                px_b, max(y0, min(y1, py_b)) + 4,
-                fill=self.theme.baseline_selected, width=1.5
-            )
         if x0 <= px_e <= x1:
             c.create_line(
                 px_e, max(y0, min(y1, py_e)),
                 px_e, max(y0, min(y1, py_sig_e)),
                 fill=self.theme.peak_drop_line, width=1
-            )
-            c.create_line(
-                px_e, max(y0, min(y1, py_e)) - 4,
-                px_e, max(y0, min(y1, py_e)) + 4,
-                fill=self.theme.baseline_selected, width=1.5
             )
 
     def _draw_peak_labels_and_handles(
@@ -1219,7 +1173,7 @@ class DualChromatogramCanvas(tk.Frame):
             y_apex = sig.value_at_time(pk.rt_min)
             px_rt, py_rt = self._data_to_px(sig.name, pk.rt_min, y_apex, rect)
 
-            # Draw apex marker
+            # Draw apex marker (neat apex dot matching UPGRADE spec)
             if py_rt < y0:
                 # Peak apex is clipped off top (off-scale peak like MeOH)
                 c.create_polygon(
@@ -1241,8 +1195,11 @@ class DualChromatogramCanvas(tk.Frame):
                 py_apex_draw = y1 - 10.0
                 is_off_top = False
             else:
-                c.create_line(px_rt - 3, py_rt, px_rt + 3, py_rt, fill=self.theme.apex_marker, width=1)
-                c.create_line(px_rt, py_rt - 3, px_rt, py_rt + 3, fill=self.theme.apex_marker, width=1)
+                c.create_oval(
+                    px_rt - 2.5, py_rt - 2.5, px_rt + 2.5, py_rt + 2.5,
+                    fill=self.theme.apex_marker, outline="",
+                    tags=("apex_marker",),
+                )
                 py_apex_draw = py_rt
                 is_off_top = False
 

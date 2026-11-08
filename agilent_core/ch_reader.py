@@ -190,35 +190,55 @@ class ChromatogramSignal:
 
         if step >= 16.0:
             self._ensure_mipmaps()
-            if step >= 256.0:
-                B = 256
-                shift = 8
-            elif step >= 64.0:
-                B = 64
-                shift = 6
-            else:
-                B = 16
-                shift = 4
-            mip = self._mipmaps.get(B, [])
-            n_mip = len(mip)
+            mip16 = self._mipmaps.get(16, [])
+            n_mip = len(mip16)
             out: List[Tuple[float, float, int, int]] = []
             for col in range(num_buckets):
                 b_start = i0 + int(col * step)
                 b_end = min(i1, max(b_start, i0 + int((col + 1) * step) - 1))
-                m0 = b_start >> shift
-                m1 = min(n_mip - 1, b_end >> shift)
-                if m0 == m1:
-                    out.append(mip[m0])
+                m0 = (b_start + 15) >> 4
+                m1 = (b_end + 1) >> 4
+                if m1 <= m0:
+                    sub = y_arr[b_start : b_end + 1]
+                    vmin = min(sub)
+                    vmax = max(sub)
+                    out.append((vmin, vmax, b_start + sub.index(vmin), b_start + sub.index(vmax)))
                 else:
-                    vmin, vmax, imin, imax = mip[m0]
-                    for m in range(m0 + 1, m1 + 1):
-                        blk = mip[m]
+                    vmin = y_arr[b_start]
+                    vmax = vmin
+                    imin = b_start
+                    imax = b_start
+                    left_boundary = m0 << 4
+                    if b_start < left_boundary:
+                        sub_l = y_arr[b_start : left_boundary]
+                        lmin = min(sub_l)
+                        lmax = max(sub_l)
+                        if lmin < vmin:
+                            vmin = lmin
+                            imin = b_start + sub_l.index(lmin)
+                        if lmax > vmax:
+                            vmax = lmax
+                            imax = b_start + sub_l.index(lmax)
+                    upper_m = min(n_mip, m1)
+                    for m in range(m0, upper_m):
+                        blk = mip16[m]
                         if blk[0] < vmin:
                             vmin = blk[0]
                             imin = blk[2]
                         if blk[1] > vmax:
                             vmax = blk[1]
                             imax = blk[3]
+                    right_boundary = m1 << 4
+                    if right_boundary <= b_end:
+                        sub_r = y_arr[right_boundary : b_end + 1]
+                        rmin = min(sub_r)
+                        rmax = max(sub_r)
+                        if rmin < vmin:
+                            vmin = rmin
+                            imin = right_boundary + sub_r.index(rmin)
+                        if rmax > vmax:
+                            vmax = rmax
+                            imax = right_boundary + sub_r.index(rmax)
                     out.append((vmin, vmax, imin, imax))
             return out
 
