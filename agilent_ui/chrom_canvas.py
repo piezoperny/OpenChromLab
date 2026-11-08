@@ -520,6 +520,16 @@ class DualChromatogramCanvas(tk.Frame):
         self._pending_redraw_id = None
         self.redraw()
 
+    def destroy(self) -> None:
+        """Clean up pending timer callbacks before widget destruction."""
+        if getattr(self, "_pending_redraw_id", None) is not None:
+            try:
+                self.after_cancel(self._pending_redraw_id)
+            except Exception:
+                pass
+            self._pending_redraw_id = None
+        super().destroy()
+
     def redraw(self) -> None:
         if self._pending_redraw_id is not None:
             try:

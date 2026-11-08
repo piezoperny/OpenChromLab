@@ -155,7 +155,7 @@ class InjectionUndoManager:
 class OpenChromLabApp(tk.Tk):
     """Main Desktop Application Window for OpenChromLab."""
 
-    def __init__(self, initial_workspace: str) -> None:
+    def __init__(self, initial_workspace: Optional[str] = None) -> None:
         super().__init__()
         self.title("OpenChromLab — Chromatography Data System")
 
@@ -181,7 +181,11 @@ class OpenChromLabApp(tk.Tk):
             except Exception:
                 pass
 
+        if not initial_workspace:
+            repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            initial_workspace = repo_root if os.path.isdir(repo_root) else os.getcwd()
         self.workspace_dir = os.path.abspath(initial_workspace)
+        self._load_seq_timer: Optional[str] = None
 
         # Application Icon (F30)
         ico_path = os.path.join(self.workspace_dir, "OpenChromLab.ico")
@@ -223,7 +227,40 @@ class OpenChromLabApp(tk.Tk):
         self.bind("<Escape>", self._on_escape_triggered)
 
         # Automatically load any .D folders in the workspace directory
-        self.after(80, lambda: self.load_directory(self.workspace_dir))
+        self._load_seq_timer = self.after(80, lambda: self.load_directory(self.workspace_dir))
+
+    def destroy(self) -> None:
+        """Cancel pending after callbacks and clean up resources before destroying window."""
+        try:
+            self.update_idletasks()
+        except Exception:
+            pass
+
+        if getattr(self, "_load_seq_timer", None) is not None:
+            try:
+                self.after_cancel(self._load_seq_timer)
+            except Exception:
+                pass
+            self._load_seq_timer = None
+
+        if hasattr(self, "chrom_canvas") and self.chrom_canvas is not None:
+            if getattr(self.chrom_canvas, "_pending_redraw_id", None) is not None:
+                try:
+                    self.chrom_canvas.after_cancel(self.chrom_canvas._pending_redraw_id)
+                except Exception:
+                    pass
+                self.chrom_canvas._pending_redraw_id = None
+
+        try:
+            for aid in self.tk.eval("after info").split():
+                try:
+                    self.after_cancel(aid)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        super().destroy()
 
     def iconbitmap(self, bitmap: Any = None, default: Any = None) -> Any:
         """Cross-platform iconbitmap wrapper: loads Windows .ico natively on Windows and falls back gracefully on X11/Linux."""
@@ -1942,6 +1979,7 @@ class OpenChromLabApp(tk.Tk):
                 activebackground=palette.tree_selected_bg,
                 activeforeground=palette.tree_selected_fg,
                 bd=0,
+                relief=tk.FLAT,
             )
         except Exception:
             pass
