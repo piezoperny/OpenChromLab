@@ -4,7 +4,9 @@ Built for educational & research GC workflows (FID1A + TCD2B).
 """
 
 import copy
+import ctypes
 import os
+import sys
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -169,7 +171,15 @@ class OpenChromLabApp(tk.Tk):
         else:
             self.geometry(f"{w}x{h}")
         self.minsize(1024, 600)
-        self.configure(bg="#F0F2F5")
+        self.configure(bg=DARK_PALETTE.bg_app)
+
+        if sys.platform == "win32":
+            try:
+                hwnd = ctypes.windll.user32.GetParent(self.winfo_id())
+                val = ctypes.c_int(1)
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(val), 4)
+            except Exception:
+                pass
 
         self.workspace_dir = os.path.abspath(initial_workspace)
 
@@ -182,8 +192,8 @@ class OpenChromLabApp(tk.Tk):
                 pass
 
         # Theme & Channel Selection Attributes (F20, F23)
-        self.current_theme_name: str = "light"
-        self.theme: ThemePalette = LIGHT_PALETTE
+        self.current_theme_name: str = "dark"
+        self.theme: ThemePalette = DARK_PALETTE
         self.channel_view_var = tk.StringVar(value="both")
 
         # Undo Managers per injection (F28)
@@ -198,6 +208,7 @@ class OpenChromLabApp(tk.Tk):
         self._build_top_toolbar()
         self._build_main_panes()
         self._build_status_bar()
+        self.set_theme("dark")
 
         # Wire canvas context menu callback (F27)
         self.chrom_canvas.on_context_menu_callback = self._show_chromatogram_context_menu
@@ -227,9 +238,7 @@ class OpenChromLabApp(tk.Tk):
 
     def _setup_styles(self) -> None:
         style = ttk.Style(self)
-        if "vista" in style.theme_names():
-            style.theme_use("vista")
-        elif "clam" in style.theme_names():
+        if "clam" in style.theme_names():
             style.theme_use("clam")
 
         # Dynamically compute rowheight for crisp text rendering on high-DPI displays
@@ -293,17 +302,19 @@ class OpenChromLabApp(tk.Tk):
         self.view_menu.add_command(label="Auto-Scale Visible Y Axes", command=lambda: self.chrom_canvas.autoscale_visible_y())
         self.menubar.add_cascade(label="View", menu=self.view_menu)
 
+        for m in (self.menubar, self.file_menu, self.int_menu, self.view_menu, self.chan_menu):
+            self._style_menu_widget(m, self.theme)
         self.config(menu=self.menubar)
 
     def _build_top_toolbar(self) -> None:
         self.topbar_frame = tk.Frame(
             self,
-            bg="#1F3864",
+            bg=self.theme.topbar_bg,
             pady=5,
             padx=8,
             bd=0,
             highlightthickness=1,
-            highlightbackground="#B8C0CC",
+            highlightbackground=self.theme.panel_border,
         )
         self.topbar_frame.pack(side=tk.TOP, fill=tk.X)
 
@@ -312,22 +323,27 @@ class OpenChromLabApp(tk.Tk):
             self.topbar_frame,
             text="OpenChromLab",
             font=("Segoe UI", 11, "bold"),
-            fg="#FFFFFF",
-            bg="#1F3864",
+            fg=self.theme.topbar_fg,
+            bg=self.theme.topbar_bg,
         )
         self.lbl_app_title.pack(side=tk.LEFT, padx=(2, 10))
+
+        top_btn_bd = getattr(self.theme, "topbar_btn_border", self.theme.panel_border)
+        badge_bg = getattr(self.theme, "method_badge_bg", self.theme.topbar_btn_bg)
+        badge_fg = getattr(self.theme, "method_badge_fg", "#FBBF24")
+        badge_bd = getattr(self.theme, "method_badge_border", self.theme.panel_border)
 
         self.lbl_method_badge = tk.Label(
             self.topbar_frame,
             text=f"Method: {self.method.name} ⚙",
             font=("Segoe UI", 9, "bold"),
-            fg="#FFD700",
-            bg="#2B4C7E",
+            fg=badge_fg,
+            bg=badge_bg,
             padx=8,
             pady=2,
             bd=0,
             highlightthickness=1,
-            highlightbackground="#3E65A0",
+            highlightbackground=badge_bd,
         )
         self.lbl_method_badge.pack(side=tk.LEFT, padx=4)
 
@@ -336,12 +352,12 @@ class OpenChromLabApp(tk.Tk):
             text="📂 Open .D / Sequence",
             command=self._open_folder_dialog,
             font=("Segoe UI", 9, "bold"),
-            bg="#FFFFFF",
-            fg="#1F3864",
+            bg=self.theme.topbar_btn_bg,
+            fg=self.theme.topbar_btn_fg,
             relief=tk.FLAT,
             bd=0,
             highlightthickness=1,
-            highlightbackground="#C8D1E0",
+            highlightbackground=top_btn_bd,
             padx=8,
             pady=2,
         )
@@ -352,12 +368,12 @@ class OpenChromLabApp(tk.Tk):
             text="📝 Method Editor",
             command=self._open_method_editor_dialog,
             font=("Segoe UI", 9),
-            bg="#E8EEF5",
-            fg="#1F3864",
+            bg=self.theme.topbar_btn_bg,
+            fg=self.theme.topbar_btn_fg,
             relief=tk.FLAT,
             bd=0,
             highlightthickness=1,
-            highlightbackground="#C8D1E0",
+            highlightbackground=top_btn_bd,
             padx=8,
             pady=2,
         )
@@ -368,29 +384,30 @@ class OpenChromLabApp(tk.Tk):
             text="⚙ Import .pmx/json",
             command=self._import_method_dialog,
             font=("Segoe UI", 9),
-            bg="#E8EEF5",
-            fg="#1F3864",
+            bg=self.theme.topbar_btn_bg,
+            fg=self.theme.topbar_btn_fg,
             relief=tk.FLAT,
             bd=0,
             highlightthickness=1,
-            highlightbackground="#C8D1E0",
+            highlightbackground=top_btn_bd,
             padx=8,
             pady=2,
         )
         self.btn_import_method.pack(side=tk.LEFT, padx=4)
 
         # Theme Toggle Button (F23)
+        toggle_txt = "☀️ Light Mode" if self.current_theme_name == "dark" else "🌙 Dark Mode"
         self.btn_theme_toggle = tk.Button(
             self.topbar_frame,
-            text="🌙 Dark Mode",
+            text=toggle_txt,
             command=self._toggle_theme,
             font=("Segoe UI", 9, "bold"),
-            bg="#2B4C7E",
-            fg="#FFFFFF",
+            bg=self.theme.topbar_btn_bg,
+            fg=self.theme.topbar_btn_fg,
             relief=tk.FLAT,
             bd=0,
             highlightthickness=1,
-            highlightbackground="#3E65A0",
+            highlightbackground=top_btn_bd,
             padx=8,
             pady=2,
         )
@@ -402,14 +419,14 @@ class OpenChromLabApp(tk.Tk):
             text="📊 Export Excel",
             command=self._export_excel_dialog,
             font=("Segoe UI", 9, "bold"),
-            bg="#107C41",
-            fg="#FFFFFF",
-            activebackground="#0B5C2E",
+            bg="#107C41" if self.current_theme_name != "dark" else self.theme.topbar_btn_bg,
+            fg="#FFFFFF" if self.current_theme_name != "dark" else self.theme.topbar_btn_fg,
+            activebackground="#0B5C2E" if self.current_theme_name != "dark" else self.theme.tree_selected_bg,
             activeforeground="#FFFFFF",
             relief=tk.FLAT,
             bd=0,
             highlightthickness=1,
-            highlightbackground="#0B5C2E",
+            highlightbackground="#0B5C2E" if self.current_theme_name != "dark" else top_btn_bd,
             padx=10,
             pady=3,
         )
@@ -420,12 +437,12 @@ class OpenChromLabApp(tk.Tk):
             text="📋 Copy Matrix",
             command=self._copy_matrix_to_clipboard,
             font=("Segoe UI", 9),
-            bg="#2B4C7E",
-            fg="#FFFFFF",
+            bg=self.theme.topbar_btn_bg,
+            fg=self.theme.topbar_btn_fg,
             relief=tk.FLAT,
             bd=0,
             highlightthickness=1,
-            highlightbackground="#3E65A0",
+            highlightbackground=top_btn_bd,
             padx=8,
             pady=3,
         )
@@ -441,15 +458,19 @@ class OpenChromLabApp(tk.Tk):
         ]
 
         # Second row toolbar: Channel View + Manual Tools + Zoom Presets
+        sub_btn_bd = getattr(self.theme, "subbar_btn_border", self.theme.panel_border)
+        sub_act_bg = getattr(self.theme, "subbar_active_bg", "#2563EB")
+        del_fg = getattr(self.theme, "subbar_delete_fg", "#F87171")
+
         self.subbar_frame = tk.Frame(
             self,
-            bg="#E9EDF4",
+            bg=self.theme.subbar_bg,
             pady=4,
             padx=8,
             bd=0,
             relief=tk.FLAT,
             highlightthickness=1,
-            highlightbackground="#B8C0CC",
+            highlightbackground=self.theme.panel_border,
         )
         self.subbar_frame.pack(side=tk.TOP, fill=tk.X)
 
@@ -457,8 +478,8 @@ class OpenChromLabApp(tk.Tk):
             self.subbar_frame,
             text="Channel View:",
             font=("Segoe UI", 9, "bold"),
-            bg="#E9EDF4",
-            fg="#1F3864",
+            bg=self.theme.subbar_bg,
+            fg=self.theme.subbar_fg,
         )
         self.lbl_channel_view.pack(side=tk.LEFT, padx=(0, 4))
 
@@ -472,9 +493,9 @@ class OpenChromLabApp(tk.Tk):
                 command=self._on_channel_view_changed,
                 indicatoron=False,
                 font=("Segoe UI", 9),
-                bg="#FFFFFF",
-                fg="#1F3864",
-                selectcolor="#CCE4F7",
+                bg=self.theme.subbar_btn_bg,
+                fg=self.theme.subbar_btn_fg,
+                selectcolor=sub_act_bg,
                 padx=6,
                 pady=2,
                 bd=0,
@@ -482,7 +503,7 @@ class OpenChromLabApp(tk.Tk):
                 offrelief=tk.FLAT,
                 overrelief=tk.FLAT,
                 highlightthickness=1,
-                highlightbackground="#B8C0CC",
+                highlightbackground=sub_btn_bd,
             )
             rb.pack(side=tk.LEFT, padx=1)
             self.channel_rbs[c_val] = rb
@@ -493,8 +514,8 @@ class OpenChromLabApp(tk.Tk):
             self.subbar_frame,
             text="Manual Tools:",
             font=("Segoe UI", 9, "bold"),
-            bg="#E9EDF4",
-            fg="#1F3864",
+            bg=self.theme.subbar_bg,
+            fg=self.theme.subbar_fg,
         )
         self.lbl_manual_tools.pack(side=tk.LEFT, padx=(0, 4))
 
@@ -515,9 +536,9 @@ class OpenChromLabApp(tk.Tk):
                 command=lambda m=mode: self._on_tool_button_clicked(m),
                 indicatoron=False,
                 font=("Segoe UI", 9),
-                bg="#FFFFFF",
-                fg="#1F3864",
-                selectcolor="#CCE4F7",
+                bg=self.theme.subbar_btn_bg,
+                fg=self.theme.subbar_btn_fg,
+                selectcolor=sub_act_bg,
                 padx=6,
                 pady=2,
                 bd=0,
@@ -525,7 +546,7 @@ class OpenChromLabApp(tk.Tk):
                 offrelief=tk.FLAT,
                 overrelief=tk.FLAT,
                 highlightthickness=1,
-                highlightbackground="#B8C0CC",
+                highlightbackground=sub_btn_bd,
             )
             rb.pack(side=tk.LEFT, padx=1)
             self.tool_rbs[mode] = rb
@@ -535,14 +556,14 @@ class OpenChromLabApp(tk.Tk):
             text="⇅ Invert (+/-)",
             command=self._toggle_selected_peak_polarity,
             font=("Segoe UI", 9),
-            bg="#FFFFFF",
-            fg="#5C2D91",
+            bg=self.theme.subbar_btn_bg,
+            fg=self.theme.subbar_btn_fg,
             padx=5,
             pady=1,
             bd=0,
             relief=tk.FLAT,
             highlightthickness=1,
-            highlightbackground="#B8C0CC",
+            highlightbackground=sub_btn_bd,
         )
         self.btn_invert.pack(side=tk.LEFT, padx=2)
 
@@ -551,14 +572,14 @@ class OpenChromLabApp(tk.Tk):
             text="🗑 Delete",
             command=self._delete_selected_peak,
             font=("Segoe UI", 9),
-            bg="#FFFFFF",
-            fg="#A4262C",
+            bg=self.theme.subbar_btn_bg,
+            fg=del_fg,
             padx=5,
             pady=1,
             bd=0,
             relief=tk.FLAT,
             highlightthickness=1,
-            highlightbackground="#B8C0CC",
+            highlightbackground=sub_btn_bd,
         )
         self.btn_delete.pack(side=tk.LEFT, padx=2)
 
@@ -567,14 +588,14 @@ class OpenChromLabApp(tk.Tk):
             text="⚡ Auto",
             command=self._reprocess_current_auto,
             font=("Segoe UI", 9),
-            bg="#FFFFFF",
-            fg="#004578",
+            bg=self.theme.subbar_btn_bg,
+            fg=self.theme.subbar_btn_fg,
             padx=5,
             pady=1,
             bd=0,
             relief=tk.FLAT,
             highlightthickness=1,
-            highlightbackground="#B8C0CC",
+            highlightbackground=sub_btn_bd,
         )
         self.btn_auto.pack(side=tk.LEFT, padx=2)
 
@@ -583,27 +604,27 @@ class OpenChromLabApp(tk.Tk):
             text="↺ .rx",
             command=self._reprocess_current_rx,
             font=("Segoe UI", 9),
-            bg="#FFFFFF",
-            fg="#333333",
+            bg=self.theme.subbar_btn_bg,
+            fg=self.theme.subbar_btn_fg,
             padx=5,
             pady=1,
             bd=0,
             relief=tk.FLAT,
             highlightthickness=1,
-            highlightbackground="#B8C0CC",
+            highlightbackground=sub_btn_bd,
         )
         self.btn_rx.pack(side=tk.LEFT, padx=2)
 
         # Quick Zoom Region Presets on right side using compact ttk.Combobox (F26)
-        self.zoom_frame = tk.Frame(self.subbar_frame, bg="#E9EDF4")
+        self.zoom_frame = tk.Frame(self.subbar_frame, bg=self.theme.subbar_bg)
         self.zoom_frame.pack(side=tk.RIGHT, padx=2)
 
         self.lbl_zoom_preset = tk.Label(
             self.zoom_frame,
             text="Zoom Preset:",
             font=("Segoe UI", 9, "bold"),
-            bg="#E9EDF4",
-            fg="#1F3864",
+            bg=self.theme.subbar_bg,
+            fg=self.theme.subbar_fg,
         )
         self.lbl_zoom_preset.pack(side=tk.LEFT, padx=(2, 4))
 
@@ -612,14 +633,14 @@ class OpenChromLabApp(tk.Tk):
             text="📷 Save Preset ▾",
             command=self._save_custom_zoom_preset,
             font=("Segoe UI", 9),
-            bg="#FFFFFF",
-            fg="#1F3864",
+            bg=self.theme.subbar_btn_bg,
+            fg=self.theme.subbar_btn_fg,
             padx=6,
             pady=1,
             bd=0,
             relief=tk.FLAT,
             highlightthickness=1,
-            highlightbackground="#B8C0CC",
+            highlightbackground=sub_btn_bd,
         )
         self.btn_save_preset.pack(side=tk.LEFT, padx=2)
 
@@ -639,14 +660,14 @@ class OpenChromLabApp(tk.Tk):
             text="Auto-Y",
             command=lambda: self.chrom_canvas.autoscale_visible_y(),
             font=("Segoe UI", 9, "bold"),
-            bg="#FFFFFF",
-            fg="#1F3864",
+            bg=self.theme.subbar_btn_bg,
+            fg=self.theme.subbar_btn_fg,
             padx=6,
             pady=1,
             bd=0,
             relief=tk.FLAT,
             highlightthickness=1,
-            highlightbackground="#B8C0CC",
+            highlightbackground=sub_btn_bd,
         )
         self.btn_auto_y.pack(side=tk.LEFT, padx=2)
 
@@ -723,14 +744,14 @@ class OpenChromLabApp(tk.Tk):
             self.left_frame,
             text="Sequence Injections (.D)",
             font=("Segoe UI", 9, "bold"),
-            bg="#D9E1F2",
-            fg="#1F3864",
+            bg=getattr(self.theme, "seq_header_bg", self.theme.subbar_bg),
+            fg=getattr(self.theme, "seq_header_fg", self.theme.fg_app),
             anchor="w",
             padx=6,
             pady=4,
             bd=0,
             highlightthickness=1,
-            highlightbackground="#B8C0CC",
+            highlightbackground=self.theme.panel_border,
         )
         self.lbl_seq.pack(fill=tk.X)
 
@@ -932,15 +953,15 @@ class OpenChromLabApp(tk.Tk):
         tab = ttk.Frame(self.notebook)
         self.notebook.add(tab, text="  2. Method Compound Table (16 Compounds)  ")
 
-        self.tab2_btn_bar = tk.Frame(tab, bg="#F0F2F5", pady=3)
+        self.tab2_btn_bar = tk.Frame(tab, bg=self.theme.bg_frame, pady=3)
         self.tab2_btn_bar.pack(side=tk.TOP, fill=tk.X, padx=6)
 
         self.tab2_lbl = tk.Label(
             self.tab2_btn_bar,
             text="Method Compounds (16) — Double-click to edit, click to highlight on plot:",
             font=("Segoe UI", 9, "bold"),
-            bg="#F0F2F5",
-            fg="#1F3864",
+            bg=self.theme.bg_frame,
+            fg=self.theme.fg_app,
         )
         self.tab2_lbl.pack(side=tk.LEFT)
 
@@ -1095,15 +1116,15 @@ class OpenChromLabApp(tk.Tk):
         tab = ttk.Frame(self.notebook)
         self.notebook.add(tab, text="  4. Single-Sheet Matrix Preview (Rows=Compounds, Cols=Injections)  ")
 
-        self.tab4_top_bar = tk.Frame(tab, bg="#F0F2F5", pady=4)
+        self.tab4_top_bar = tk.Frame(tab, bg=self.theme.bg_frame, pady=4)
         self.tab4_top_bar.pack(side=tk.TOP, fill=tk.X, padx=6)
 
         self.tab4_lbl = tk.Label(
             self.tab4_top_bar,
             text="Live Preview of Single-Sheet Export (Rows = 16 Method Compounds | Columns = All Loaded Injections):",
             font=("Segoe UI", 9, "bold"),
-            bg="#F0F2F5",
-            fg="#1F3864",
+            bg=self.theme.bg_frame,
+            fg=self.theme.fg_app,
         )
         self.tab4_lbl.pack(side=tk.LEFT)
 
@@ -1151,14 +1172,14 @@ class OpenChromLabApp(tk.Tk):
             self,
             textvariable=self.status_var,
             font=("Segoe UI", 9),
-            bg="#1F3864",
-            fg="#FFFFFF",
+            bg=self.theme.status_bg,
+            fg=self.theme.status_fg,
             anchor="w",
             padx=10,
             pady=3,
             bd=0,
             highlightthickness=1,
-            highlightbackground="#B8C0CC",
+            highlightbackground=self.theme.panel_border,
         )
         self.status_bar_lbl.pack(side=tk.BOTTOM, fill=tk.X)
 
@@ -2051,14 +2072,8 @@ class OpenChromLabApp(tk.Tk):
         # 6. Comprehensive ttk.Style Configuration (F9, F11)
         style = ttk.Style(self)
         row_h = getattr(self, "_tree_row_height", 26)
-        if norm == "dark":
-            if "clam" in style.theme_names():
-                style.theme_use("clam")
-        else:
-            if "vista" in style.theme_names():
-                style.theme_use("vista")
-            elif "clam" in style.theme_names():
-                style.theme_use("clam")
+        if "clam" in style.theme_names():
+            style.theme_use("clam")
 
         style.configure("TFrame", background=palette.bg_frame)
         style.configure("TPanedwindow", background=palette.bg_app)
@@ -2142,22 +2157,20 @@ class OpenChromLabApp(tk.Tk):
         self.option_add("*TCombobox*Listbox.selectBackground", palette.tree_selected_bg)
         self.option_add("*TCombobox*Listbox.selectForeground", palette.tree_selected_fg)
 
-        style.configure(
-            "Vertical.TScrollbar",
-            background=palette.subbar_btn_bg,
-            troughcolor=palette.tree_bg,
-            bordercolor=palette.tree_bg,
-            arrowcolor=palette.axis_text,
-            relief="flat",
-        )
-        style.configure(
-            "Horizontal.TScrollbar",
-            background=palette.subbar_btn_bg,
-            troughcolor=palette.tree_bg,
-            bordercolor=palette.tree_bg,
-            arrowcolor=palette.axis_text,
-            relief="flat",
-        )
+        for s_orient in ("Vertical.TScrollbar", "Horizontal.TScrollbar"):
+            style.configure(
+                s_orient,
+                gripcount=0,
+                background="#263040" if norm == "dark" else palette.subbar_btn_bg,
+                troughcolor="#11161F" if norm == "dark" else palette.tree_bg,
+                bordercolor="#11161F" if norm == "dark" else palette.tree_bg,
+                lightcolor="#263040" if norm == "dark" else palette.subbar_btn_bg,
+                darkcolor="#263040" if norm == "dark" else palette.subbar_btn_bg,
+                arrowcolor="#94A3B8" if norm == "dark" else palette.axis_text,
+                arrowsize=11,
+                relief="flat",
+            )
+            style.map(s_orient, background=[("active", "#3B82F6"), ("pressed", "#2563EB")])
 
         style.configure(
             "Treeview",
@@ -2167,8 +2180,8 @@ class OpenChromLabApp(tk.Tk):
             foreground=palette.tree_fg,
             fieldbackground=palette.tree_bg,
             bordercolor=palette.panel_border,
-            lightcolor=palette.panel_border,
-            darkcolor=palette.panel_border,
+            lightcolor=palette.tree_bg,
+            darkcolor=palette.tree_bg,
             borderwidth=0,
             relief="flat",
         )
@@ -2186,6 +2199,7 @@ class OpenChromLabApp(tk.Tk):
             lightcolor=palette.tree_header_bg,
             darkcolor=palette.tree_header_bg,
             relief="flat",
+            borderwidth=0,
         )
         style.map(
             "Treeview.Heading",
@@ -2202,19 +2216,23 @@ class OpenChromLabApp(tk.Tk):
             "TNotebook",
             background=palette.bg_app,
             bordercolor=palette.panel_border,
-            lightcolor=palette.panel_border,
-            darkcolor=palette.panel_border,
+            lightcolor=palette.bg_app,
+            darkcolor=palette.bg_app,
+            borderwidth=0,
+            relief="flat",
             tabmargins=(2, 2, 2, 0),
         )
         style.configure(
             "TNotebook.Tab",
             font=("Segoe UI", 9, "bold"),
-            padding=(12, 5),
+            padding=(14, 6),
             background=tab_inact_bg,
             foreground=tab_inact_fg,
             bordercolor=palette.panel_border,
-            lightcolor=tab_act_fg if norm == "dark" else palette.panel_border,
-            darkcolor=palette.panel_border,
+            lightcolor=tab_inact_bg,
+            darkcolor=tab_inact_bg,
+            borderwidth=0,
+            relief="flat",
         )
         style.map(
             "TNotebook.Tab",

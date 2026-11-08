@@ -184,12 +184,19 @@ class TestChallenger2EmpiricalMethodEditor(unittest.TestCase):
         dlg.destroy()
 
     def test_method_editor_dialog_standalone_without_theme_param(self):
-        """Verify MethodEditorDialog works when instantiated without theme argument (defaults to LIGHT_PALETTE)."""
+        """Verify MethodEditorDialog works when instantiated without theme argument (defaults to DARK_PALETTE)."""
         dlg = MethodEditorDialog(self.root, method=self.method)
         dlg.update_idletasks()
-        self.assertEqual(dlg.theme, LIGHT_PALETTE)
-        self.assertEqual(str(dlg.cget("bg")).upper(), LIGHT_PALETTE.bg_app.upper())
+        self.assertEqual(dlg.theme, DARK_PALETTE)
+        self.assertEqual(str(dlg.cget("bg")).upper(), DARK_PALETTE.bg_app.upper())
         dlg.destroy()
+
+        # Explicit light theme
+        dlg_light = MethodEditorDialog(self.root, method=self.method, theme=LIGHT_PALETTE)
+        dlg_light.update_idletasks()
+        self.assertEqual(dlg_light.theme, LIGHT_PALETTE)
+        self.assertEqual(str(dlg_light.cget("bg")).upper(), LIGHT_PALETTE.bg_app.upper())
+        dlg_light.destroy()
 
 
 class TestChallenger2EmpiricalSegmentedPills(unittest.TestCase):

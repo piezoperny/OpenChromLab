@@ -6,7 +6,9 @@ integration settings, and timed integration events.
 """
 
 import copy
+import ctypes
 import os
+import sys
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Callable, Dict, List, Optional, Tuple
@@ -32,11 +34,19 @@ class MethodEditorDialog(tk.Toplevel):
         theme: Optional[ThemePalette] = None,
     ) -> None:
         super().__init__(parent)
-        self.theme: ThemePalette = theme if theme is not None else getattr(parent, "theme", LIGHT_PALETTE)
+        self.theme: ThemePalette = theme if theme is not None else getattr(parent, "theme", DARK_PALETTE)
         self.configure(bg=self.theme.bg_app)
         self.title("Method Editor — OpenChromLab")
         self.geometry("980x680")
         self.minsize(850, 550)
+
+        if sys.platform == "win32":
+            try:
+                hwnd = ctypes.windll.user32.GetParent(self.winfo_id())
+                val = ctypes.c_int(1)
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(val), 4)
+            except Exception:
+                pass
 
         self.on_method_saved = on_method_saved
 
@@ -681,8 +691,16 @@ class _CompoundEditSubDialog(tk.Toplevel):
         self.transient(parent)
         self.grab_set()
         self.resizable(False, False)
-        p_theme = getattr(parent, "theme", LIGHT_PALETTE)
+        p_theme = getattr(parent, "theme", DARK_PALETTE)
         self.configure(padx=16, pady=12, bg=p_theme.bg_frame)
+
+        if sys.platform == "win32":
+            try:
+                hwnd = ctypes.windll.user32.GetParent(self.winfo_id())
+                val = ctypes.c_int(1)
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(val), 4)
+            except Exception:
+                pass
 
         self.compound = compound
         self.result: Optional[CompoundDef] = None
@@ -771,8 +789,16 @@ class _TimedEventEditSubDialog(tk.Toplevel):
         self.transient(parent)
         self.grab_set()
         self.resizable(False, False)
-        p_theme = getattr(parent, "theme", LIGHT_PALETTE)
+        p_theme = getattr(parent, "theme", DARK_PALETTE)
         self.configure(padx=16, pady=12, bg=p_theme.bg_frame)
+
+        if sys.platform == "win32":
+            try:
+                hwnd = ctypes.windll.user32.GetParent(self.winfo_id())
+                val = ctypes.c_int(1)
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(val), 4)
+            except Exception:
+                pass
 
         self.event = event
         self.result: Optional[TimedEvent] = None

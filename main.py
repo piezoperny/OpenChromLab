@@ -26,8 +26,19 @@ def enable_windows_dpi_awareness() -> None:
                 pass
 
 
+def enable_windows_dark_mode() -> None:
+    """Enable Windows 10/11 native immersive dark mode for titlebars and menus."""
+    if sys.platform == "win32":
+        try:
+            # Ordinal 135 in uxtheme.dll is SetPreferredAppMode (2 = ForceDark)
+            ctypes.windll.uxtheme[135](2)
+        except Exception:
+            pass
+
+
 def main() -> None:
     enable_windows_dpi_awareness()
+    enable_windows_dark_mode()
     workspace_dir = os.path.dirname(os.path.abspath(__file__))
     if len(sys.argv) > 1 and os.path.exists(sys.argv[1]):
         workspace_dir = os.path.abspath(sys.argv[1])

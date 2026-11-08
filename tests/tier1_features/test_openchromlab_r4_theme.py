@@ -38,16 +38,17 @@ class TestOpenChromLabR4Theme(HeadlessTkTestCase):
 
         # Light background vs Dark background
         self.assertEqual(LIGHT_PALETTE.canvas_bg.upper(), "#FFFFFF")
-        self.assertEqual(DARK_PALETTE.canvas_bg.upper(), "#181818")
+        self.assertEqual(DARK_PALETTE.canvas_bg.upper(), "#0D1117")
 
         # Immutability check (frozen dataclass)
         with self.assertRaises(Exception):
             LIGHT_PALETTE.canvas_bg = "#000000"
 
-    def test_r4_02_light_mode_is_initial_default_on_app_start(self) -> None:
+    def test_r4_02_dark_mode_is_initial_default_on_app_start(self) -> None:
         """
-        Verify that Light mode is the default theme when the application starts up fresh.
-        Authoritative source: ORIGINAL_REQUEST.md (R4 Acceptance Criteria).
+        Verify that Dark mode is the default theme when the application starts up fresh,
+        matching the modern UPGRADE overhaul, and verify runtime theme switching.
+        Authoritative source: ORIGINAL_REQUEST.md (R4 Acceptance Criteria & M2 UPGRADE).
         """
         from agilent_ui.main_window import OpenLabSubstituteApp
         try:
@@ -59,14 +60,23 @@ class TestOpenChromLabR4Theme(HeadlessTkTestCase):
         app = app_cls(initial_workspace=get_workspace_root())
         app.withdraw()
         try:
-            theme_name = getattr(app, "current_theme_name", "light")
+            theme_name = getattr(app, "current_theme_name", "dark")
             self.assertEqual(
                 theme_name,
-                "light",
-                "Light mode must be the initial default theme on startup."
+                "dark",
+                "Dark mode must be the initial default theme on startup."
             )
             if hasattr(app.chrom_canvas, "theme"):
-                self.assertEqual(app.chrom_canvas.theme.name, "light")
+                self.assertEqual(app.chrom_canvas.theme.name, "dark")
+
+            # Verify switching to light mode and back to dark mode
+            app.set_theme("light")
+            self.assertEqual(app.current_theme_name, "light")
+            self.assertEqual(app.chrom_canvas.theme.name, "light")
+
+            app.set_theme("dark")
+            self.assertEqual(app.current_theme_name, "dark")
+            self.assertEqual(app.chrom_canvas.theme.name, "dark")
         finally:
             app.destroy()
 
