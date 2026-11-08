@@ -81,6 +81,7 @@ class DualChromatogramCanvas(tk.Frame):
         self._trace_cache: Dict[str, dict] = {}
         self._last_cfg_size: Tuple[int, int] = (0, 0)
         self._pending_redraw_id: Optional[str] = None
+        self._is_destroyed: bool = False
 
         # Layout margins (F10: margin_mid >= 46, margin_bottom >= 46 to eliminate FID1A tick / TCD2B title collisions)
         self.margin_left = 76
@@ -503,6 +504,14 @@ class DualChromatogramCanvas(tk.Frame):
         Request canvas redraw. If immediate=False, coalesces multiple rapid calls
         into a smooth 60 FPS animation frame (~16 ms) to eliminate lag on high-frequency mouse drag.
         """
+        if getattr(self, "_is_destroyed", False):
+            return
+        try:
+            if not self.winfo_exists():
+                return
+        except Exception:
+            return
+
         if immediate:
             if self._pending_redraw_id is not None:
                 try:
@@ -518,19 +527,38 @@ class DualChromatogramCanvas(tk.Frame):
 
     def _execute_scheduled_redraw(self) -> None:
         self._pending_redraw_id = None
+        if getattr(self, "_is_destroyed", False):
+            return
+        try:
+            if not self.winfo_exists():
+                return
+        except Exception:
+            return
         self.redraw()
 
     def destroy(self) -> None:
         """Clean up pending timer callbacks before widget destruction."""
+        self._is_destroyed = True
         if getattr(self, "_pending_redraw_id", None) is not None:
             try:
                 self.after_cancel(self._pending_redraw_id)
             except Exception:
                 pass
             self._pending_redraw_id = None
-        super().destroy()
+        try:
+            super().destroy()
+        except Exception:
+            pass
 
     def redraw(self) -> None:
+        if getattr(self, "_is_destroyed", False):
+            return
+        try:
+            if not self.winfo_exists():
+                return
+        except Exception:
+            return
+
         if self._pending_redraw_id is not None:
             try:
                 self.after_cancel(self._pending_redraw_id)

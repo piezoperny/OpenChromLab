@@ -186,6 +186,7 @@ class OpenChromLabApp(tk.Tk):
             initial_workspace = repo_root if os.path.isdir(repo_root) else os.getcwd()
         self.workspace_dir = os.path.abspath(initial_workspace)
         self._load_seq_timer: Optional[str] = None
+        self._is_destroyed: bool = False
 
         # Application Icon (F30)
         ico_path = os.path.join(self.workspace_dir, "OpenChromLab.ico")
@@ -231,10 +232,9 @@ class OpenChromLabApp(tk.Tk):
 
     def destroy(self) -> None:
         """Cancel pending after callbacks and clean up resources before destroying window."""
-        try:
-            self.update_idletasks()
-        except Exception:
-            pass
+        if getattr(self, "_is_destroyed", False):
+            return
+        self._is_destroyed = True
 
         if getattr(self, "_load_seq_timer", None) is not None:
             try:
@@ -244,12 +244,10 @@ class OpenChromLabApp(tk.Tk):
             self._load_seq_timer = None
 
         if hasattr(self, "chrom_canvas") and self.chrom_canvas is not None:
-            if getattr(self.chrom_canvas, "_pending_redraw_id", None) is not None:
-                try:
-                    self.chrom_canvas.after_cancel(self.chrom_canvas._pending_redraw_id)
-                except Exception:
-                    pass
-                self.chrom_canvas._pending_redraw_id = None
+            try:
+                self.chrom_canvas.destroy()
+            except Exception:
+                pass
 
         try:
             for aid in self.tk.eval("after info").split():
@@ -260,7 +258,10 @@ class OpenChromLabApp(tk.Tk):
         except Exception:
             pass
 
-        super().destroy()
+        try:
+            super().destroy()
+        except Exception:
+            pass
 
     def iconbitmap(self, bitmap: Any = None, default: Any = None) -> Any:
         """Cross-platform iconbitmap wrapper: loads Windows .ico natively on Windows and falls back gracefully on X11/Linux."""
