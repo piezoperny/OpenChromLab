@@ -5,3 +5,6 @@ __pycache__/
 ORIGINAL_REQUEST.md
 PROJECT.md
 .pytest_cache/
+build/
+dist/
+*.spec.bak
