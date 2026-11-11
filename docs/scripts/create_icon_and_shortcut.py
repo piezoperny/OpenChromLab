@@ -3,7 +3,7 @@ OpenChromLab Icon and Windows Shortcut Generator.
 
 Generates:
 1. OpenChromLab.ico: Multi-tier chromatography artwork icon in workspace root.
-2. OpenChromLab.lnk: Windows shortcut pointing to Run_OpenChromLab.bat with OpenChromLab.ico.
+2. OpenChromLab.lnk: Windows shortcut pointing to OpenChromLab.bat with OpenChromLab.ico.
 """
 
 import os

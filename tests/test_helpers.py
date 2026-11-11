@@ -42,6 +42,9 @@ def get_reference_xlsx_path() -> str:
 
 def get_sample_method_path() -> str:
     """Return the absolute path to MPZ_method-2.2.json."""
+    test_set_path = os.path.join(WORKSPACE_ROOT, "test-set", "MPZ_method-2.2.json")
+    if os.path.isfile(test_set_path):
+        return test_set_path
     return os.path.join(WORKSPACE_ROOT, "MPZ_method-2.2.json")
 
 

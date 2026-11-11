@@ -17,10 +17,10 @@ class TestOpenChromLabR9LauncherIcon(HeadlessTkTestCase):
 
     def test_r9_01_launcher_script_exists_and_executable(self) -> None:
         """
-        Verify that Run_OpenChromLab.bat exists at project root and sets window title.
+        Verify that OpenChromLab.bat exists at project root and sets window title.
         Authoritative source: ORIGINAL_REQUEST.md (R9 Acceptance Criteria).
         """
-        bat_path = os.path.join(get_workspace_root(), "Run_OpenChromLab.bat")
+        bat_path = os.path.join(get_workspace_root(), "OpenChromLab.bat")
         self.assertTrue(
             os.path.isfile(bat_path),
             f"Launcher script '{bat_path}' must exist."
@@ -33,18 +33,18 @@ class TestOpenChromLabR9LauncherIcon(HeadlessTkTestCase):
         title_lines = [l for l in lines if l.startswith("title")]
         self.assertTrue(
             any("openchromlab" in l for l in title_lines),
-            f"Run_OpenChromLab.bat must configure title with OpenChromLab. Found: {title_lines}"
+            f"OpenChromLab.bat must configure title with OpenChromLab. Found: {title_lines}"
         )
 
     def test_r9_02_launcher_script_has_python_launcher_resilience(self) -> None:
         """
-        Verify that Run_OpenChromLab.bat includes fallback logic to invoke either 'py'
+        Verify that OpenChromLab.bat includes fallback logic to invoke either 'py'
         or 'python' to ensure operation on varied Windows installations.
         Authoritative source: Explorer 3 § 3.5.1.
         """
-        bat_path = os.path.join(get_workspace_root(), "Run_OpenChromLab.bat")
+        bat_path = os.path.join(get_workspace_root(), "OpenChromLab.bat")
         if not os.path.isfile(bat_path):
-            self.skipTest("Run_OpenChromLab.bat pending creation by worker_m5.")
+            self.skipTest("OpenChromLab.bat pending creation.")
             return
 
         with open(bat_path, "r", encoding="utf-8", errors="ignore") as f:

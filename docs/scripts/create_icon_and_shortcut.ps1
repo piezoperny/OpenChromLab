@@ -19,7 +19,7 @@ Write-Output "Workspace root: $WorkspaceRoot"
 Add-Type -AssemblyName System.Drawing
 
 $icoPath = Join-Path $WorkspaceRoot "OpenChromLab.ico"
-$batPath = Join-Path $WorkspaceRoot "Run_OpenChromLab.bat"
+$batPath = Join-Path $WorkspaceRoot "OpenChromLab.bat"
 $lnkPath = Join-Path $WorkspaceRoot "OpenChromLab.lnk"
 
 # -------------------------------------------------------------------------

@@ -37,20 +37,16 @@
 
 ## 🚀 Quick Start
 
-### 1. Requirements
-* Windows 10 or 11 (64-bit)
-* Python 3.8+ (using standard library `tkinter`, `struct`, `xml.etree.ElementTree`, `zipfile`)
-* `openpyxl` (for Excel batch export)
-* `Pillow` (for icon and logo rendering):
-  ```bash
-  pip install openpyxl Pillow
-  ```
+### 1. Requirements & Portability
+* **Windows 10 or 11 (64-bit)**
+* **Zero administrator privileges required**: OpenChromLab is 100% portable and self-contained.
+* **Auto-Contained Python**: If Python is already installed, OpenChromLab runs immediately using standard library modules. If Python is not detected on a lab computer, double-clicking [`OpenChromLab.bat`](file:///home/antigravity/piezoperny/OpenChromLab/OpenChromLab.bat) automatically sets up an isolated, portable user-space runtime with no admin prompts.
 
 ### 2. Launching OpenChromLab
 You can launch the program in any of the following ways:
 
-* **Double-click batch launcher**: Double-click [`OpenChromLab.bat`](file:///home/antigravity/piezoperny/OpenChromLab/OpenChromLab.bat) or [`Run_OpenChromLab.bat`](file:///home/antigravity/piezoperny/OpenChromLab/Run_OpenChromLab.bat).
-* **Desktop shortcut**: Double-click [`OpenChromLab.lnk`](file:///home/antigravity/piezoperny/OpenChromLab/OpenChromLab.lnk) (styled with the official high-resolution icon [`OpenChromLab.ico`](file:///home/antigravity/piezoperny/OpenChromLab/OpenChromLab.ico)).
+* **Desktop Shortcut**: Double-click [`OpenChromLab.lnk`](file:///home/antigravity/piezoperny/OpenChromLab/OpenChromLab.lnk) (custom high-resolution squircle icon).
+* **Double-Click Batch Launcher**: Double-click [`OpenChromLab.bat`](file:///home/antigravity/piezoperny/OpenChromLab/OpenChromLab.bat) (runs cleanly with `pythonw`/`pyw` without a console window).
 * **Command line**:
   ```bash
   python main.py
@@ -84,12 +80,10 @@ You can launch the program in any of the following ways:
 
 ```
 OpenChromLab/
-├── OpenChromLab.bat            # Primary double-click launcher
-├── Run_OpenChromLab.bat        # Legacy-compatible launcher
+├── OpenChromLab.bat            # Self-contained zero-admin launcher
 ├── OpenChromLab.ico            # Multi-resolution application icon (16-256px)
 ├── OpenChromLab.lnk            # Windows desktop shortcut
 ├── main.py                     # Application entry point & DPI awareness
-├── MPZ_method-2.2.json         # Reference catalysis processing method
 │
 ├── agilent_core/               # Chromatography & Math Core Engines
 │   ├── ch_reader.py            # Binary .ch parser & OpenLab .rx ground truth reader
@@ -103,6 +97,7 @@ OpenChromLab/
 │   ├── theme.py                # Native Windows dark titlebars & color palettes
 │   ├── method_editor.py        # Method creation and editing dialog
 │   ├── shortcut_dialog.py      # Keyboard shortcut manager & remapping modal
+│   ├── about_dialog.py         # Application info, version, and architecture modal
 │   ├── splash.py               # 2-second frameless loading splash screen
 │   └── logo.png                # High-res cute application logo artwork
 │
@@ -113,14 +108,12 @@ OpenChromLab/
 │   ├── TEST_READY.md           # Verification checklist
 │   └── scripts/                # Icon and shortcut automation utilities
 │
-├── tests/                      # Automated 4-Tier Test Suite (133 E2E tests)
-│   ├── run_e2e_tests.py        # Master test runner
-│   ├── tier1_features/         # Individual feature test suites (R1–R10)
-│   ├── tier2_boundaries/       # Baseline boundary & stress test cases
-│   ├── tier3_combinations/     # Cross-feature combined workflow tests
-│   └── tier4_real_world/       # Real-world 11-injection dataset verification
+├── test-set/                   # Real-world validation dataset
+│   ├── MPZ_method-2.2.json     # Reference catalysis processing method
+│   ├── MPZ_Reaction_Summary.xlsx # Ground-truth reference Excel summary
+│   └── MPZHY14_reaction_*.D    # 11 authentic Agilent GC reaction runs
 │
-└── test-set/                   # Real Agilent .D injection test directories
+└── tests/                      # Automated 4-Tier Test Suite (133 E2E tests)
 ```
 
 ---

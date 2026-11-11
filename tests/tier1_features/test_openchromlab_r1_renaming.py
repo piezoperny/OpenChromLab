@@ -95,13 +95,13 @@ class TestOpenChromLabR1Renaming(HeadlessTkTestCase):
             "OpenLabSubstituteApp must be an identical alias to OpenChromLabApp."
         )
 
-    def test_r1_04_run_openchromlab_bat_script_exists_and_valid(self) -> None:
+    def test_r1_04_openchromlab_bat_script_exists_and_valid(self) -> None:
         """
-        Verify that Run_OpenChromLab.bat exists at the workspace root, sets the title
+        Verify that OpenChromLab.bat exists at the workspace root, sets the title
         to OpenChromLab, and executes main.py.
         Authoritative source: ORIGINAL_REQUEST.md (R1), PROJECT.md (F30).
         """
-        bat_path = os.path.join(get_workspace_root(), "Run_OpenChromLab.bat")
+        bat_path = os.path.join(get_workspace_root(), "OpenChromLab.bat")
         self.assertTrue(
             os.path.isfile(bat_path),
             f"Launcher script '{bat_path}' must exist at the workspace root."
@@ -113,12 +113,12 @@ class TestOpenChromLabR1Renaming(HeadlessTkTestCase):
         self.assertIn(
             "OpenChromLab",
             content,
-            "Run_OpenChromLab.bat must reference 'OpenChromLab' in title or execution."
+            "OpenChromLab.bat must reference 'OpenChromLab' in title or execution."
         )
         self.assertIn(
             "main.py",
             content,
-            "Run_OpenChromLab.bat must execute main.py."
+            "OpenChromLab.bat must execute main.py."
         )
 
     def test_r1_05_openchromlab_bat_primary_launcher_exists(self) -> None:

@@ -43,6 +43,7 @@ from agilent_core.method_model import (
 from agilent_ui.theme import ThemePalette, LIGHT_PALETTE, DARK_PALETTE, apply_windows_dark_titlebar
 from agilent_ui.method_editor import MethodEditorDialog
 from agilent_ui.shortcut_dialog import ShortcutSettingsDialog, load_shortcuts
+from agilent_ui.about_dialog import AboutDialog
 from agilent_ui.splash import APP_VERSION
 from .chrom_canvas import DualChromatogramCanvas, HitType
 
@@ -164,7 +165,7 @@ class OpenChromLabApp(tk.Tk):
         empty_homepage: Optional[bool] = None,
     ) -> None:
         super().__init__()
-        self.title(f"OpenChromLab v{APP_VERSION} — Chromatography Data System")
+        self.title(f"OpenChromLab v{APP_VERSION} (Beta) — Chromatography Data System")
 
         # Responsive sizing: fit standard 1080p @ 125% DPI displays (1536x864) without pushing status bar off-screen
         sw = self.winfo_screenwidth()
@@ -349,6 +350,8 @@ class OpenChromLabApp(tk.Tk):
             command=self._export_excel_dialog,
         )
         self.file_menu.add_separator()
+        self.file_menu.add_command(label="About OpenChromLab...", command=self.show_about_dialog)
+        self.file_menu.add_separator()
         self.file_menu.add_command(label="Exit", command=self.destroy)
         self.menubar.add_cascade(label="File", menu=self.file_menu)
 
@@ -441,7 +444,21 @@ class OpenChromLabApp(tk.Tk):
             highlightthickness=1,
             highlightbackground=self.theme.panel_border,
         )
-        self.lbl_app_version.pack(side=tk.LEFT, padx=(0, 8))
+        self.lbl_app_version.pack(side=tk.LEFT, padx=(0, 2))
+
+        self.lbl_app_beta = tk.Label(
+            self.topbar_frame,
+            text="BETA",
+            font=("Segoe UI", 7, "bold"),
+            fg="#F59E0B",
+            bg="#2B1D0E" if getattr(self.theme, "is_dark", False) else "#FEF3C7",
+            padx=4,
+            pady=1,
+            bd=0,
+            highlightthickness=1,
+            highlightbackground="#D97706",
+        )
+        self.lbl_app_beta.pack(side=tk.LEFT, padx=(0, 8))
 
         top_btn_bd = getattr(self.theme, "topbar_btn_border", self.theme.panel_border)
 
@@ -525,7 +542,24 @@ class OpenChromLabApp(tk.Tk):
             pady=2,
             cursor="hand2",
         )
-        self.btn_shortcuts.pack(side=tk.LEFT, padx=(1, 8))
+        self.btn_shortcuts.pack(side=tk.LEFT, padx=(1, 3))
+
+        self.btn_about = tk.Button(
+            self.topbar_frame,
+            text="ⓘ About",
+            command=self.show_about_dialog,
+            font=("Segoe UI", 9),
+            bg=self.theme.topbar_btn_bg,
+            fg=self.theme.topbar_btn_fg,
+            relief=tk.FLAT,
+            bd=0,
+            highlightthickness=1,
+            highlightbackground=top_btn_bd,
+            padx=8,
+            pady=2,
+            cursor="hand2",
+        )
+        self.btn_about.pack(side=tk.LEFT, padx=(0, 8))
 
         badge_bg = getattr(self.theme, "method_badge_bg", self.theme.topbar_btn_bg)
         badge_fg = getattr(self.theme, "method_badge_fg", "#FBBF24")
@@ -648,6 +682,7 @@ class OpenChromLabApp(tk.Tk):
 
         self.topbar_buttons = [
             self.btn_shortcuts,
+            self.btn_about,
             self.btn_open_seq,
             self.btn_method_editor,
             self.btn_import_method,
@@ -1604,6 +1639,10 @@ class OpenChromLabApp(tk.Tk):
     # Keyboard Shortcuts & Remapping Engine
     # ------------------------------------------------------------------
 
+    def show_about_dialog(self) -> None:
+        """Open the About OpenChromLab dialog."""
+        AboutDialog(self, theme=self.theme, on_open_shortcuts=self._open_shortcut_dialog)
+
     def _open_shortcut_dialog(self) -> None:
         """Open the shortcut settings and key remapping dialog."""
         ShortcutSettingsDialog(self, theme=self.theme, on_shortcuts_updated=self._apply_shortcuts)
@@ -2372,6 +2411,12 @@ class OpenChromLabApp(tk.Tk):
                 bg=getattr(palette, "method_badge_bg", palette.topbar_btn_bg),
                 fg="#38BDF8",
                 highlightbackground=palette.panel_border,
+            )
+        if hasattr(self, "lbl_app_beta"):
+            self.lbl_app_beta.configure(
+                bg="#2B1D0E" if norm == "dark" else "#FEF3C7",
+                fg="#F59E0B",
+                highlightbackground="#D97706",
             )
         if hasattr(self, "lbl_method_badge"):
             self.lbl_method_badge.configure(

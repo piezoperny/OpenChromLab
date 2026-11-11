@@ -149,6 +149,36 @@ class TestWorkspaceNavigationEnhancements(HeadlessTkTestCase):
         finally:
             top.destroy()
 
+    def test_about_dialog_and_beta_badges(self) -> None:
+        """Verify AboutDialog opens cleanly, beta badges exist, and version displays properly."""
+        from agilent_ui.about_dialog import AboutDialog
+        from agilent_ui.splash import APP_VERSION, SplashScreen
+
+        app = self.app
+        # Verify main window topbar version & beta badge
+        self.assertTrue(hasattr(app, "lbl_app_version"))
+        self.assertIn(APP_VERSION, app.lbl_app_version.cget("text"))
+        self.assertTrue(hasattr(app, "lbl_app_beta"))
+        self.assertEqual(app.lbl_app_beta.cget("text"), "BETA")
+        self.assertTrue(hasattr(app, "btn_about"))
+
+        # Test AboutDialog instantiation
+        about = AboutDialog(app, theme=app.theme, on_open_shortcuts=app._open_shortcut_dialog)
+        try:
+            self.assertTrue(about.winfo_exists())
+            self.assertIn("About OpenChromLab", about.title())
+        finally:
+            about.destroy()
+
+        # Test SplashScreen renders with BETA pill and completes
+        completed = []
+        splash = SplashScreen(app, on_complete=lambda: completed.append(True), duration_ms=50)
+        try:
+            self.assertTrue(splash.winfo_exists())
+        finally:
+            splash.destroy()
+
 
 if __name__ == "__main__":
     unittest.main()
+

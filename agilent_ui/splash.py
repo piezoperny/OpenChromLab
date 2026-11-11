@@ -100,10 +100,24 @@ class SplashScreen(tk.Toplevel):
         )
         lbl_ver.pack(side=tk.LEFT, padx=(8, 0))
 
+        lbl_beta = tk.Label(
+            hdr_frame,
+            text="BETA",
+            font=("Segoe UI", 8, "bold"),
+            fg="#F59E0B",
+            bg="#2B1D0E",
+            padx=5,
+            pady=1,
+            bd=0,
+            highlightthickness=1,
+            highlightbackground="#D97706",
+        )
+        lbl_beta.pack(side=tk.LEFT, padx=(5, 0))
+
         # 3. Subtitle / Product description
         lbl_sub = tk.Label(
             main_box,
-            text="Chromatography Data System • Fast Reaction GC",
+            text="Chromatography Data System • Fast Reaction GC (Beta)",
             font=("Segoe UI", 9),
             fg="#94A3B8",
             bg="#0F172A",
