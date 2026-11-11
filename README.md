@@ -1,9 +1,10 @@
 # OpenChromLab
 
+[![Version](https://img.shields.io/badge/version-1.1.0-orange.svg)]()
 [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-lightgrey.svg)]()
-[![Status](https://img.shields.io/badge/tests-127%2F127%20passing-brightgreen.svg)]()
+[![Status](https://img.shields.io/badge/tests-133%2F133%20passing-brightgreen.svg)]()
 
 > **A high-performance, open-source Windows desktop substitute for Agilent OpenLab CDS Data Analysis (v2.7)** tailored for heterogeneous catalysis and reaction gas chromatography workflows (dual-channel FID1A + TCD2B).
 
@@ -13,6 +14,7 @@
 
 - **Fluid 60 FPS Chromatogram Navigation**: Custom level-of-detail (LOD) downsampling algorithm, spatial hash indexing, and transient label suppression during active dragging make panning and zooming silky smooth even with 100,000+ raw data points.
 - **Native Immersive Dark & Light Themes**: Sleek graphical interface with modern carbon styling, native Windows 10/11 dark titlebars (`DWMWA_USE_IMMERSIVE_DARK_MODE` and dark caption colors), and instant theme toggling.
+- **2-Second Modern Splash Screen**: Cute loading screen with animated progress bar and high-res application artwork while initializing ChemStation engine and user settings.
 - **Fast Sequence Review (Keep Zoom View)**: Move between sequence injections with `PageDown` / `PageUp` (or `]` / `[`) without losing your active zoom position. Perfect for reviewing a specific product peak across 40+ runs in seconds.
 - **Customizable Shortcuts & Remapping**: Inspect and rebind any application shortcut through the built-in `⌨ Shortcuts` dialog, saved to `openchromlab_shortcuts.json`.
 - **Modular Workspace Panels**: Toggle visibility of the Left Sequence Tree, Bottom-Left Plot Overlays card, and Bottom Data Tables directly from the **View** menu. Press `F10` to maximize the chromatogram plot to 100% of the window.
@@ -38,9 +40,10 @@
 ### 1. Requirements
 * Windows 10 or 11 (64-bit)
 * Python 3.8+ (using standard library `tkinter`, `struct`, `xml.etree.ElementTree`, `zipfile`)
-* `openpyxl` (for Excel batch export):
+* `openpyxl` (for Excel batch export)
+* `Pillow` (for icon and logo rendering):
   ```bash
-  pip install openpyxl
+  pip install openpyxl Pillow
   ```
 
 ### 2. Launching OpenChromLab
@@ -52,7 +55,7 @@ You can launch the program in any of the following ways:
   ```bash
   python main.py
   ```
-  *(To automatically load a sequence folder on startup: `python main.py "C:\path\to\sequence"`)*
+  *(To bypass the 2-second splash screen: `python main.py --no-splash`)*
 
 ---
 
@@ -99,15 +102,18 @@ OpenChromLab/
 │   ├── chrom_canvas.py         # 60 FPS dual-channel stacked chromatogram canvas
 │   ├── theme.py                # Native Windows dark titlebars & color palettes
 │   ├── method_editor.py        # Method creation and editing dialog
-│   └── shortcut_dialog.py      # Keyboard shortcut manager & remapping modal
+│   ├── shortcut_dialog.py      # Keyboard shortcut manager & remapping modal
+│   ├── splash.py               # 2-second frameless loading splash screen
+│   └── logo.png                # High-res cute application logo artwork
 │
 ├── docs/                       # Architecture, test plans & specification docs
 │   ├── PROJECT.md              # Complete design specifications & requirements
 │   ├── ORIGINAL_REQUEST.md     # Baseline project requirements
 │   ├── TEST_INFRA.md           # 4-tier test framework documentation
-│   └── TEST_READY.md           # Verification checklist
+│   ├── TEST_READY.md           # Verification checklist
+│   └── scripts/                # Icon and shortcut automation utilities
 │
-├── tests/                      # Automated 4-Tier Test Suite (127 E2E tests)
+├── tests/                      # Automated 4-Tier Test Suite (133 E2E tests)
 │   ├── run_e2e_tests.py        # Master test runner
 │   ├── tier1_features/         # Individual feature test suites (R1–R10)
 │   ├── tier2_boundaries/       # Baseline boundary & stress test cases
@@ -124,7 +130,7 @@ OpenChromLab/
 OpenChromLab includes a comprehensive 4-tier end-to-end verification suite:
 
 ```bash
-# Run full E2E test suite (127 tests)
+# Run full E2E test suite (133 tests)
 python tests/run_e2e_tests.py
 ```
 

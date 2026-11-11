@@ -121,16 +121,14 @@ class TestOpenChromLabR1Renaming(HeadlessTkTestCase):
             "Run_OpenChromLab.bat must execute main.py."
         )
 
-    def test_r1_05_legacy_run_openlab_substitute_bat_exists(self) -> None:
+    def test_r1_05_openchromlab_bat_primary_launcher_exists(self) -> None:
         """
-        Verify that the legacy Run_OpenLab_Substitute.bat exists and continues to operate
-        or forward to the new launcher without breaking existing user workflows.
-        Authoritative source: ORIGINAL_REQUEST.md (R1), PROJECT.md § Architecture.
+        Verify that OpenChromLab.bat exists at workspace root as the primary double-click launcher.
         """
-        legacy_bat_path = os.path.join(get_workspace_root(), "Run_OpenLab_Substitute.bat")
+        bat_path = os.path.join(get_workspace_root(), "OpenChromLab.bat")
         self.assertTrue(
-            os.path.isfile(legacy_bat_path),
-            f"Legacy launcher script '{legacy_bat_path}' must remain intact for backward compatibility."
+            os.path.isfile(bat_path),
+            f"Primary launcher script '{bat_path}' must exist at workspace root."
         )
 
     def test_r1_06_main_entrypoint_references_openchromlab(self) -> None:

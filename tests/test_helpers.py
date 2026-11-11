@@ -34,6 +34,9 @@ def get_test_set_path() -> str:
 
 def get_reference_xlsx_path() -> str:
     """Return the absolute path to MPZ_Reaction_Summary.xlsx."""
+    test_set_path = os.path.join(WORKSPACE_ROOT, "test-set", "MPZ_Reaction_Summary.xlsx")
+    if os.path.isfile(test_set_path):
+        return test_set_path
     return os.path.join(WORKSPACE_ROOT, "MPZ_Reaction_Summary.xlsx")
 
 

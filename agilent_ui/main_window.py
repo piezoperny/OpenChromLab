@@ -43,6 +43,7 @@ from agilent_core.method_model import (
 from agilent_ui.theme import ThemePalette, LIGHT_PALETTE, DARK_PALETTE, apply_windows_dark_titlebar
 from agilent_ui.method_editor import MethodEditorDialog
 from agilent_ui.shortcut_dialog import ShortcutSettingsDialog, load_shortcuts
+from agilent_ui.splash import APP_VERSION
 from .chrom_canvas import DualChromatogramCanvas, HitType
 
 
@@ -163,7 +164,7 @@ class OpenChromLabApp(tk.Tk):
         empty_homepage: Optional[bool] = None,
     ) -> None:
         super().__init__()
-        self.title("OpenChromLab — Chromatography Data System")
+        self.title(f"OpenChromLab v{APP_VERSION} — Chromatography Data System")
 
         # Responsive sizing: fit standard 1080p @ 125% DPI displays (1536x864) without pushing status bar off-screen
         sw = self.winfo_screenwidth()
@@ -418,6 +419,7 @@ class OpenChromLabApp(tk.Tk):
         self.topbar_frame.pack(side=tk.TOP, fill=tk.X)
 
         # App Title & Method Badge (F19, F8)
+        # App Title & Version Badge
         self.lbl_app_title = tk.Label(
             self.topbar_frame,
             text="OpenChromLab",
@@ -425,15 +427,39 @@ class OpenChromLabApp(tk.Tk):
             fg=self.theme.topbar_fg,
             bg=self.theme.topbar_bg,
         )
-        self.lbl_app_title.pack(side=tk.LEFT, padx=(2, 8))
+        self.lbl_app_title.pack(side=tk.LEFT, padx=(2, 4))
+
+        self.lbl_app_version = tk.Label(
+            self.topbar_frame,
+            text=f"v{APP_VERSION}",
+            font=("Segoe UI", 8, "bold"),
+            fg="#38BDF8",
+            bg=getattr(self.theme, "method_badge_bg", self.theme.topbar_btn_bg),
+            padx=5,
+            pady=1,
+            bd=0,
+            highlightthickness=1,
+            highlightbackground=self.theme.panel_border,
+        )
+        self.lbl_app_version.pack(side=tk.LEFT, padx=(0, 8))
 
         top_btn_bd = getattr(self.theme, "topbar_btn_border", self.theme.panel_border)
 
-        # Sleek In-Window Dark Menubar for native Windows dark aesthetic
-        self.btn_menu_file = tk.Menubutton(
+        def _popup_menu(btn: tk.Widget, menu: tk.Menu) -> str:
+            btn.update_idletasks()
+            x = btn.winfo_rootx()
+            y = btn.winfo_rooty() + btn.winfo_height()
+            try:
+                menu.tk_popup(x, y)
+            finally:
+                menu.grab_release()
+            return "break"
+
+        # Sleek In-Window Dark Menubar buttons (using tk_popup for 100% reliable cross-platform opening)
+        self.btn_menu_file = tk.Button(
             self.topbar_frame,
             text="File ▾",
-            menu=self.file_menu,
+            command=lambda: _popup_menu(self.btn_menu_file, self.file_menu),
             font=("Segoe UI", 9),
             bg=self.theme.topbar_bg,
             fg=self.theme.topbar_fg,
@@ -443,13 +469,15 @@ class OpenChromLabApp(tk.Tk):
             bd=0,
             padx=6,
             pady=2,
+            cursor="hand2",
         )
         self.btn_menu_file.pack(side=tk.LEFT, padx=1)
+        self.btn_menu_file.bind("<Button-1>", lambda e: _popup_menu(self.btn_menu_file, self.file_menu))
 
-        self.btn_menu_int = tk.Menubutton(
+        self.btn_menu_int = tk.Button(
             self.topbar_frame,
             text="Integration ▾",
-            menu=self.int_menu,
+            command=lambda: _popup_menu(self.btn_menu_int, self.int_menu),
             font=("Segoe UI", 9),
             bg=self.theme.topbar_bg,
             fg=self.theme.topbar_fg,
@@ -459,13 +487,15 @@ class OpenChromLabApp(tk.Tk):
             bd=0,
             padx=6,
             pady=2,
+            cursor="hand2",
         )
         self.btn_menu_int.pack(side=tk.LEFT, padx=1)
+        self.btn_menu_int.bind("<Button-1>", lambda e: _popup_menu(self.btn_menu_int, self.int_menu))
 
-        self.btn_menu_view = tk.Menubutton(
+        self.btn_menu_view = tk.Button(
             self.topbar_frame,
             text="View ▾",
-            menu=self.view_menu,
+            command=lambda: _popup_menu(self.btn_menu_view, self.view_menu),
             font=("Segoe UI", 9),
             bg=self.theme.topbar_bg,
             fg=self.theme.topbar_fg,
@@ -475,8 +505,10 @@ class OpenChromLabApp(tk.Tk):
             bd=0,
             padx=6,
             pady=2,
+            cursor="hand2",
         )
         self.btn_menu_view.pack(side=tk.LEFT, padx=1)
+        self.btn_menu_view.bind("<Button-1>", lambda e: _popup_menu(self.btn_menu_view, self.view_menu))
 
         self.btn_shortcuts = tk.Button(
             self.topbar_frame,
@@ -2335,6 +2367,12 @@ class OpenChromLabApp(tk.Tk):
                     activebackground=palette.topbar_btn_bg,
                     activeforeground="#FFFFFF",
                 )
+        if hasattr(self, "lbl_app_version"):
+            self.lbl_app_version.configure(
+                bg=getattr(palette, "method_badge_bg", palette.topbar_btn_bg),
+                fg="#38BDF8",
+                highlightbackground=palette.panel_border,
+            )
         if hasattr(self, "lbl_method_badge"):
             self.lbl_method_badge.configure(
                 bg=getattr(palette, "method_badge_bg", palette.topbar_btn_bg),
