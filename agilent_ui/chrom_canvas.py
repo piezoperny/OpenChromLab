@@ -597,6 +597,9 @@ class DualChromatogramCanvas(tk.Frame):
                 tags=("overlay_interactive",),
             )
         elif self._drag_state["mode"] == "draw_peak":
+            # If Shift is held, draw a perfectly horizontal baseline line
+            if self._drag_state.get("shift_constrained"):
+                y1_d = y0_d
             c.create_line(
                 x0_d, y0_d, x1_d, y1_d,
                 fill=self.theme.baseline_selected, width=2, dash=(4, 2),
@@ -797,10 +800,16 @@ class DualChromatogramCanvas(tk.Frame):
 
         if sig is None or not sig.time_min:
             c.create_text(
-                (x0 + x1) * 0.5, (y0 + y1) * 0.5,
+                (x0 + x1) * 0.5, (y0 + y1) * 0.5 - 12,
                 text=f"No {sname} signal loaded",
-                font=("Segoe UI", 10, "italic"),
+                font=("Segoe UI", 11, "bold"),
                 fill=self.theme.label_unnamed,
+            )
+            c.create_text(
+                (x0 + x1) * 0.5, (y0 + y1) * 0.5 + 12,
+                text="Use '📂 Open .D / Sequence' or File Menu to load chromatography data",
+                font=("Segoe UI", 9, "italic"),
+                fill=self.theme.axis_tick,
             )
             return
 
@@ -1133,6 +1142,11 @@ class DualChromatogramCanvas(tk.Frame):
                     )
 
         if not self.show_compound_labels.get():
+            return
+
+        # Fast Drag Optimization: During active panning / x-axis dragging across large screens,
+        # skip label placement to maintain silky 60 FPS navigation. Labels immediately reappear on mouse release.
+        if self._drag_state is not None and self._drag_state.get("mode") in ("pan", "x_axis_pan", "y_axis_pan", "x_axis_scale", "y_amplitude"):
             return
 
         vis_peaks = [pk for pk in peaks if self.x_range[0] <= pk.rt_min <= self.x_range[1]]
@@ -1552,11 +1566,21 @@ class DualChromatogramCanvas(tk.Frame):
             kind = self._drag_state["kind"]
             t_new, y_new = self._px_to_data(sname, event.x, event.y, rect)
             t_new = max(sig.time_min[0], min(sig.time_min[-1], t_new))
+            shift_pressed = bool(event.state & 0x0001)
             alt_pressed = bool(event.state & 0x20000)
-            if self.snap_anchors_to_trace.get() and not alt_pressed:
-                y_new = sig.value_at_time(t_new)
 
             pks = self.injection.peaks_by_signal.get(sname, [])
+            target_pk = next((p for p in pks if p.peak_id == pk_id), None)
+
+            # If Shift is held, lock to horizontal baseline matching opposite anchor's Y
+            if shift_pressed and target_pk is not None:
+                if kind == "start":
+                    y_new = target_pk.baseline_end_y
+                else:
+                    y_new = target_pk.baseline_start_y
+            elif self.snap_anchors_to_trace.get() and not alt_pressed:
+                y_new = sig.value_at_time(t_new)
+
             for pk in pks:
                 if pk.peak_id == pk_id:
                     if kind == "start":
@@ -1576,7 +1600,11 @@ class DualChromatogramCanvas(tk.Frame):
             self._update_drag_overlay(rects=rects)
 
         elif mode == "draw_peak":
-            self._drag_state["cur_px"] = (event.x, event.y)
+            shift_pressed = bool(event.state & 0x0001)
+            self._drag_state["shift_constrained"] = shift_pressed
+            cur_x = event.x
+            cur_y = self._drag_state["start_px"][1] if shift_pressed else event.y
+            self._drag_state["cur_px"] = (cur_x, cur_y)
             self._update_drag_overlay(rects=rects)
 
         elif mode == "pan":
@@ -1638,13 +1666,22 @@ class DualChromatogramCanvas(tk.Frame):
         elif mode == "draw_peak" and rect:
             t0 = self._drag_state["t0"]
             y0 = self._drag_state["y0"]
-            t1, y1 = self._px_to_data(sname, event.x, event.y, rect)
+            shift_pressed = bool(event.state & 0x0001) or self._drag_state.get("shift_constrained", False)
+            if shift_pressed:
+                # Force perfect horizontal baseline (y1 = y0)
+                t1, _ = self._px_to_data(sname, event.x, event.y, rect)
+                y1 = y0
+                snap_to_curve = False
+            else:
+                t1, y1 = self._px_to_data(sname, event.x, event.y, rect)
+                snap_to_curve = self.snap_anchors_to_trace.get()
+
             sig = self.injection.signals[sname]
             pks = self.injection.peaks_by_signal.get(sname, [])
             updated, new_pk = add_manual_peak(
                 sig, pks, t0, y0, t1, y1,
                 method=self.method,
-                snap_to_curve=self.snap_anchors_to_trace.get(),
+                snap_to_curve=snap_to_curve,
             )
             self.injection.peaks_by_signal[sname] = updated
             if new_pk is not None:

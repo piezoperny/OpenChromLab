@@ -34,6 +34,7 @@ from agilent_core.integrator import (
 from agilent_core.method_model import (
     CompoundDef,
     ProcessingMethod,
+    SignalMethodConfig,
     TimedEvent,
     ZoomPresetDef,
     build_default_mpz_method,
@@ -155,7 +156,11 @@ class InjectionUndoManager:
 class OpenChromLabApp(tk.Tk):
     """Main Desktop Application Window for OpenChromLab."""
 
-    def __init__(self, initial_workspace: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        initial_workspace: Optional[str] = None,
+        empty_homepage: Optional[bool] = None,
+    ) -> None:
         super().__init__()
         self.title("OpenChromLab — Chromatography Data System")
 
@@ -183,8 +188,16 @@ class OpenChromLabApp(tk.Tk):
 
         if not initial_workspace:
             repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            initial_workspace = repo_root if os.path.isdir(repo_root) else os.getcwd()
-        self.workspace_dir = os.path.abspath(initial_workspace)
+            self.workspace_dir = repo_root if os.path.isdir(repo_root) else os.getcwd()
+            auto_load_on_startup = False
+            if empty_homepage is None:
+                empty_homepage = True
+        else:
+            self.workspace_dir = os.path.abspath(initial_workspace)
+            # Only auto-load if explicit workspace/folder path was supplied by user/test
+            auto_load_on_startup = True
+            if empty_homepage is None:
+                empty_homepage = False
         self._load_seq_timer: Optional[str] = None
         self._is_destroyed: bool = False
 
@@ -204,7 +217,18 @@ class OpenChromLabApp(tk.Tk):
         # Undo Managers per injection (F28)
         self.undo_managers: Dict[str, InjectionUndoManager] = {}
 
-        self.method: ProcessingMethod = build_default_mpz_method()
+        # Default home page: clean empty state with no injection selected and no default method pre-selected
+        if empty_homepage:
+            self.method: ProcessingMethod = ProcessingMethod(
+                name="No Method Selected",
+                compounds=[],
+                signals={
+                    "FID1A": SignalMethodConfig(signal_name="FID1A"),
+                    "TCD2B": SignalMethodConfig(signal_name="TCD2B"),
+                },
+            )
+        else:
+            self.method: ProcessingMethod = build_default_mpz_method()
         self.injections: List[InjectionData] = []
         self.current_injection: Optional[InjectionData] = None
 
@@ -214,6 +238,9 @@ class OpenChromLabApp(tk.Tk):
         self._build_main_panes()
         self._build_status_bar()
         self.set_theme("dark")
+
+        # Apply Windows 10/11 native immersive dark titlebar (DWMWA_USE_IMMERSIVE_DARK_MODE)
+        self._apply_windows_dark_titlebar()
 
         # Wire canvas context menu callback (F27)
         self.chrom_canvas.on_context_menu_callback = self._show_chromatogram_context_menu
@@ -227,8 +254,30 @@ class OpenChromLabApp(tk.Tk):
         self.bind("<Control-Z>", self._on_undo_triggered)
         self.bind("<Escape>", self._on_escape_triggered)
 
-        # Automatically load any .D folders in the workspace directory
-        self._load_seq_timer = self.after(80, lambda: self.load_directory(self.workspace_dir))
+        # Only auto-load if an explicit directory was passed in
+        if auto_load_on_startup and os.path.isdir(self.workspace_dir):
+            self._load_seq_timer = self.after(80, lambda: self.load_directory(self.workspace_dir))
+        else:
+            self.status_var.set("Ready — Open a .D folder or sequence directory to begin.")
+
+    def _apply_windows_dark_titlebar(self) -> None:
+        """Apply Windows 10/11 native immersive dark titlebar and carbon top styling."""
+        if sys.platform != "win32":
+            return
+        try:
+            self.update_idletasks()
+            hwnd = ctypes.windll.user32.GetParent(self.winfo_id())
+            if not hwnd:
+                hwnd = self.winfo_id()
+            # DWMWA_USE_IMMERSIVE_DARK_MODE: 20 (Windows 10 build 19041+ & Windows 11), 19 (older Windows 10)
+            val = ctypes.c_int(1)
+            for attr in (20, 19):
+                try:
+                    ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, attr, ctypes.byref(val), ctypes.sizeof(val))
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     def destroy(self) -> None:
         """Cancel pending after callbacks and clean up resources before destroying window."""
@@ -342,7 +391,11 @@ class OpenChromLabApp(tk.Tk):
 
         for m in (self.menubar, self.file_menu, self.int_menu, self.view_menu, self.chan_menu):
             self._style_menu_widget(m, self.theme)
-        self.config(menu=self.menubar)
+
+        # On non-Windows (or Linux/macOS), keep native menubar; on Windows, omit self.config(menu=...)
+        # to avoid the classic un-themeable stark-white top bar, and instead use sleek dark in-app menu buttons.
+        if sys.platform != "win32":
+            self.config(menu=self.menubar)
 
     def _build_top_toolbar(self) -> None:
         self.topbar_frame = tk.Frame(
@@ -364,9 +417,59 @@ class OpenChromLabApp(tk.Tk):
             fg=self.theme.topbar_fg,
             bg=self.theme.topbar_bg,
         )
-        self.lbl_app_title.pack(side=tk.LEFT, padx=(2, 10))
+        self.lbl_app_title.pack(side=tk.LEFT, padx=(2, 8))
 
         top_btn_bd = getattr(self.theme, "topbar_btn_border", self.theme.panel_border)
+
+        # Sleek In-Window Dark Menubar for native Windows dark aesthetic
+        self.btn_menu_file = tk.Menubutton(
+            self.topbar_frame,
+            text="File ▾",
+            menu=self.file_menu,
+            font=("Segoe UI", 9),
+            bg=self.theme.topbar_bg,
+            fg=self.theme.topbar_fg,
+            activebackground=self.theme.topbar_btn_bg,
+            activeforeground="#FFFFFF",
+            relief=tk.FLAT,
+            bd=0,
+            padx=6,
+            pady=2,
+        )
+        self.btn_menu_file.pack(side=tk.LEFT, padx=1)
+
+        self.btn_menu_int = tk.Menubutton(
+            self.topbar_frame,
+            text="Integration ▾",
+            menu=self.int_menu,
+            font=("Segoe UI", 9),
+            bg=self.theme.topbar_bg,
+            fg=self.theme.topbar_fg,
+            activebackground=self.theme.topbar_btn_bg,
+            activeforeground="#FFFFFF",
+            relief=tk.FLAT,
+            bd=0,
+            padx=6,
+            pady=2,
+        )
+        self.btn_menu_int.pack(side=tk.LEFT, padx=1)
+
+        self.btn_menu_view = tk.Menubutton(
+            self.topbar_frame,
+            text="View ▾",
+            menu=self.view_menu,
+            font=("Segoe UI", 9),
+            bg=self.theme.topbar_bg,
+            fg=self.theme.topbar_fg,
+            activebackground=self.theme.topbar_btn_bg,
+            activeforeground="#FFFFFF",
+            relief=tk.FLAT,
+            bd=0,
+            padx=6,
+            pady=2,
+        )
+        self.btn_menu_view.pack(side=tk.LEFT, padx=(1, 8))
+
         badge_bg = getattr(self.theme, "method_badge_bg", self.theme.topbar_btn_bg)
         badge_fg = getattr(self.theme, "method_badge_fg", "#FBBF24")
         badge_bd = getattr(self.theme, "method_badge_border", self.theme.panel_border)
@@ -2002,6 +2105,18 @@ class OpenChromLabApp(tk.Tk):
             )
         if hasattr(self, "lbl_app_title"):
             self.lbl_app_title.configure(bg=palette.topbar_bg, fg=palette.topbar_fg)
+        for mb in (
+            getattr(self, "btn_menu_file", None),
+            getattr(self, "btn_menu_int", None),
+            getattr(self, "btn_menu_view", None),
+        ):
+            if mb is not None:
+                mb.configure(
+                    bg=palette.topbar_bg,
+                    fg=palette.topbar_fg,
+                    activebackground=palette.topbar_btn_bg,
+                    activeforeground="#FFFFFF",
+                )
         if hasattr(self, "lbl_method_badge"):
             self.lbl_method_badge.configure(
                 bg=getattr(palette, "method_badge_bg", palette.topbar_btn_bg),

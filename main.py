@@ -39,11 +39,11 @@ def enable_windows_dark_mode() -> None:
 def main() -> None:
     enable_windows_dpi_awareness()
     enable_windows_dark_mode()
-    workspace_dir = os.path.dirname(os.path.abspath(__file__))
+    cli_dir = None
     if len(sys.argv) > 1 and os.path.exists(sys.argv[1]):
-        workspace_dir = os.path.abspath(sys.argv[1])
+        cli_dir = os.path.abspath(sys.argv[1])
 
-    app = OpenChromLabApp(initial_workspace=workspace_dir)
+    app = OpenChromLabApp(initial_workspace=cli_dir)
     app.mainloop()
 
 

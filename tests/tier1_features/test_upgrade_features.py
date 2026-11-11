@@ -371,6 +371,57 @@ class TestUpgradeFeatures(HeadlessTkTestCase):
         finally:
             app.destroy()
 
+    def test_f14_shift_key_horizontal_baseline(self) -> None:
+        """Verify Shift key locks manual baseline drawing and anchor adjustment to be perfectly horizontal."""
+        inj = create_synthetic_injection()
+        method = build_default_mpz_method()
+        root = tk.Tk()
+        try:
+            root.withdraw()
+            canvas = DualChromatogramCanvas(root)
+            canvas.set_theme(DARK_PALETTE)
+            canvas.set_data(inj, method)
+            canvas.pack(fill=tk.BOTH, expand=True)
+            root.update_idletasks()
+
+            # 1. Simulate Shift + draw_peak
+            canvas.set_tool_mode("draw_peak")
+            rects = canvas._get_panel_rects()
+            rx0, ry0, rx1, ry1 = rects["FID1A"]
+            mid_y = int((ry0 + ry1) * 0.5)
+
+            down_evt = tk.Event()
+            down_evt.x = int(rx0 + (rx1 - rx0) * 0.3)
+            down_evt.y = mid_y
+            down_evt.state = 0
+            canvas._on_left_down(down_evt)
+            self.assertIsNotNone(canvas._drag_state)
+            self.assertEqual(canvas._drag_state["mode"], "draw_peak")
+
+            # Drag with Shift key pressed (state & 0x0001)
+            drag_evt = tk.Event()
+            drag_evt.x = int(rx0 + (rx1 - rx0) * 0.6)
+            drag_evt.y = mid_y + 40  # Different vertical pixel
+            drag_evt.state = 0x0001  # Shift pressed
+            canvas._on_left_drag(drag_evt)
+            self.assertTrue(canvas._drag_state.get("shift_constrained"))
+            self.assertEqual(canvas._drag_state["cur_px"][1], canvas._drag_state["start_px"][1])
+
+            # Release with Shift key pressed
+            up_evt = tk.Event()
+            up_evt.x = int(rx0 + (rx1 - rx0) * 0.6)
+            up_evt.y = mid_y + 40
+            up_evt.state = 0x0001
+            canvas._on_left_up(up_evt)
+
+            # Assert newly added manual peak has identical baseline_start_y and baseline_end_y
+            fid_peaks = inj.peaks_by_signal.get("FID1A", [])
+            self.assertGreater(len(fid_peaks), 0)
+            added_pk = fid_peaks[-1]
+            self.assertAlmostEqual(added_pk.baseline_start_y, added_pk.baseline_end_y, places=5)
+        finally:
+            root.destroy()
+
 
 if __name__ == "__main__":
     unittest.main()
