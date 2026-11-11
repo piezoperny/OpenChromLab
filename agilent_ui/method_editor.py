@@ -20,7 +20,7 @@ from agilent_core.method_model import (
     TimedEvent,
     build_default_mpz_method,
 )
-from agilent_ui.theme import DARK_PALETTE, LIGHT_PALETTE, ThemePalette
+from agilent_ui.theme import DARK_PALETTE, LIGHT_PALETTE, ThemePalette, apply_windows_dark_titlebar
 
 
 class MethodEditorDialog(tk.Toplevel):
@@ -40,13 +40,9 @@ class MethodEditorDialog(tk.Toplevel):
         self.geometry("980x680")
         self.minsize(850, 550)
 
-        if sys.platform == "win32":
-            try:
-                hwnd = ctypes.windll.user32.GetParent(self.winfo_id())
-                val = ctypes.c_int(1)
-                ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(val), 4)
-            except Exception:
-                pass
+        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        ico_path = os.path.join(repo_root, "OpenChromLab.ico")
+        apply_windows_dark_titlebar(self, ico_path)
 
         self.on_method_saved = on_method_saved
 
@@ -694,13 +690,9 @@ class _CompoundEditSubDialog(tk.Toplevel):
         p_theme = getattr(parent, "theme", DARK_PALETTE)
         self.configure(padx=16, pady=12, bg=p_theme.bg_frame)
 
-        if sys.platform == "win32":
-            try:
-                hwnd = ctypes.windll.user32.GetParent(self.winfo_id())
-                val = ctypes.c_int(1)
-                ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(val), 4)
-            except Exception:
-                pass
+        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        ico_path = os.path.join(repo_root, "OpenChromLab.ico")
+        apply_windows_dark_titlebar(self, ico_path)
 
         self.compound = compound
         self.result: Optional[CompoundDef] = None
@@ -792,13 +784,9 @@ class _TimedEventEditSubDialog(tk.Toplevel):
         p_theme = getattr(parent, "theme", DARK_PALETTE)
         self.configure(padx=16, pady=12, bg=p_theme.bg_frame)
 
-        if sys.platform == "win32":
-            try:
-                hwnd = ctypes.windll.user32.GetParent(self.winfo_id())
-                val = ctypes.c_int(1)
-                ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(val), 4)
-            except Exception:
-                pass
+        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        ico_path = os.path.join(repo_root, "OpenChromLab.ico")
+        apply_windows_dark_titlebar(self, ico_path)
 
         self.event = event
         self.result: Optional[TimedEvent] = None

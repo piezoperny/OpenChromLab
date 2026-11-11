@@ -4,7 +4,70 @@ Provides standardized color palettes for application windows, toolbars,
 treeviews, and chromatogram plot canvas elements.
 """
 
+import ctypes
+import os
+import sys
 from dataclasses import dataclass
+from typing import Any, Optional
+
+
+def apply_windows_dark_titlebar(window: Any, icon_path: Optional[str] = None) -> None:
+    """
+    Apply native Windows 10/11 immersive dark mode (DWMWA_USE_IMMERSIVE_DARK_MODE),
+    dark caption color, and custom icon to a Tkinter root window or Toplevel dialog.
+    """
+    if icon_path and os.path.exists(icon_path):
+        try:
+            window.iconbitmap(icon_path)
+        except Exception:
+            pass
+
+    if sys.platform != "win32":
+        return
+
+    def _do_apply() -> None:
+        try:
+            window.update_idletasks()
+            wid = window.winfo_id()
+            # Find the root OS HWND for this window (GA_ROOT = 2)
+            hwnd = ctypes.windll.user32.GetAncestor(wid, 2)
+            if not hwnd:
+                hwnd = ctypes.windll.user32.GetParent(wid)
+            if not hwnd:
+                hwnd = wid
+
+            # 1. DWMWA_USE_IMMERSIVE_DARK_MODE: 20 (Windows 10 20H1+ & Win 11), 19 (older Win 10)
+            val = ctypes.c_int(1)
+            for attr in (20, 19):
+                try:
+                    ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                        hwnd, attr, ctypes.byref(val), ctypes.sizeof(val)
+                    )
+                except Exception:
+                    pass
+
+            # 2. Windows 11 Build 22000+: Explicit dark caption color (35) and white text (36)
+            # COLORREF format: 0x00BBGGRR -> #1E1E1E is 0x001E1E1E
+            dark_bg = ctypes.c_uint32(0x001E1E1E)
+            white_fg = ctypes.c_uint32(0x00FFFFFF)
+            try:
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                    hwnd, 35, ctypes.byref(dark_bg), ctypes.sizeof(dark_bg)
+                )
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                    hwnd, 36, ctypes.byref(white_fg), ctypes.sizeof(white_fg)
+                )
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+    _do_apply()
+    try:
+        window.after(50, _do_apply)
+        window.after(200, _do_apply)
+    except Exception:
+        pass
 
 
 @dataclass(frozen=True)

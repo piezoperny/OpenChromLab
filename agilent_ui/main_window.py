@@ -40,8 +40,9 @@ from agilent_core.method_model import (
     build_default_mpz_method,
     load_pmx_method,
 )
-from agilent_ui.theme import ThemePalette, LIGHT_PALETTE, DARK_PALETTE
+from agilent_ui.theme import ThemePalette, LIGHT_PALETTE, DARK_PALETTE, apply_windows_dark_titlebar
 from agilent_ui.method_editor import MethodEditorDialog
+from agilent_ui.shortcut_dialog import ShortcutSettingsDialog, load_shortcuts
 from .chrom_canvas import DualChromatogramCanvas, HitType
 
 
@@ -214,6 +215,11 @@ class OpenChromLabApp(tk.Tk):
         self.theme: ThemePalette = DARK_PALETTE
         self.channel_view_var = tk.StringVar(value="both")
 
+        # Modular Workspace Panel Visibility (View Menu Controls)
+        self.show_seq_panel_var = tk.BooleanVar(value=True)
+        self.show_overlays_panel_var = tk.BooleanVar(value=True)
+        self.show_bottom_tables_var = tk.BooleanVar(value=True)
+
         # Undo Managers per injection (F28)
         self.undo_managers: Dict[str, InjectionUndoManager] = {}
 
@@ -239,20 +245,16 @@ class OpenChromLabApp(tk.Tk):
         self._build_status_bar()
         self.set_theme("dark")
 
-        # Apply Windows 10/11 native immersive dark titlebar (DWMWA_USE_IMMERSIVE_DARK_MODE)
+        # Apply Windows 10/11 native immersive dark titlebar (DWMWA_USE_IMMERSIVE_DARK_MODE + DWMWA_CAPTION_COLOR)
         self._apply_windows_dark_titlebar()
 
         # Wire canvas context menu callback (F27)
         self.chrom_canvas.on_context_menu_callback = self._show_chromatogram_context_menu
         self.chrom_canvas.canvas.bind("<<CanvasContextMenu>>", self._on_canvas_context_virtual_event)
 
-        # Keyboard shortcuts (F28)
-        self.bind("<Delete>", lambda e: self._delete_selected_peak())
-        self.bind("<Control-e>", lambda e: self._export_excel_dialog())
-        self.bind("<Control-s>", lambda e: self._save_current_manual_overrides())
-        self.bind("<Control-z>", self._on_undo_triggered)
-        self.bind("<Control-Z>", self._on_undo_triggered)
-        self.bind("<Escape>", self._on_escape_triggered)
+        # Apply configurable keyboard shortcuts & sequence navigation (F28 + R7)
+        self._bound_keys: List[str] = []
+        self._apply_shortcuts()
 
         # Only auto-load if an explicit directory was passed in
         if auto_load_on_startup and os.path.isdir(self.workspace_dir):
@@ -262,22 +264,8 @@ class OpenChromLabApp(tk.Tk):
 
     def _apply_windows_dark_titlebar(self) -> None:
         """Apply Windows 10/11 native immersive dark titlebar and carbon top styling."""
-        if sys.platform != "win32":
-            return
-        try:
-            self.update_idletasks()
-            hwnd = ctypes.windll.user32.GetParent(self.winfo_id())
-            if not hwnd:
-                hwnd = self.winfo_id()
-            # DWMWA_USE_IMMERSIVE_DARK_MODE: 20 (Windows 10 build 19041+ & Windows 11), 19 (older Windows 10)
-            val = ctypes.c_int(1)
-            for attr in (20, 19):
-                try:
-                    ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, attr, ctypes.byref(val), ctypes.sizeof(val))
-                except Exception:
-                    pass
-        except Exception:
-            pass
+        ico_path = os.path.join(self.workspace_dir, "OpenChromLab.ico")
+        apply_windows_dark_titlebar(self, ico_path)
 
     def destroy(self) -> None:
         """Cancel pending after callbacks and clean up resources before destroying window."""
@@ -375,18 +363,38 @@ class OpenChromLabApp(tk.Tk):
         self.menubar.add_cascade(label="Integration", menu=self.int_menu)
 
         self.view_menu = tk.Menu(self.menubar, tearoff=0)
+
+        # Embedded Channel View radiobuttons directly in View menu
+        self.view_menu.add_radiobutton(label="Both Channels (FID1A + TCD2B)", variable=self.channel_view_var, value="both", command=self._on_channel_view_changed)
+        self.view_menu.add_radiobutton(label="FID Only (FID1A)", variable=self.channel_view_var, value="FID1A", command=self._on_channel_view_changed)
+        self.view_menu.add_radiobutton(label="TCD Only (TCD2B)", variable=self.channel_view_var, value="TCD2B", command=self._on_channel_view_changed)
+        self.view_menu.add_separator()
+
+        # Modular Workspace Panels (Agilent layout toggles)
+        self.view_menu.add_checkbutton(label="Show Sequence Injections (Left)", variable=self.show_seq_panel_var, command=self._toggle_seq_panel)
+        self.view_menu.add_checkbutton(label="Show Plot Overlays & Options (Bottom-Left)", variable=self.show_overlays_panel_var, command=self._toggle_overlays_panel)
+        self.view_menu.add_checkbutton(label="Show Data Tables & Peaks (Bottom)", variable=self.show_bottom_tables_var, command=self._toggle_bottom_tables)
+        self.view_menu.add_separator()
+
+        self.view_menu.add_command(label="Maximize Chromatogram Plot   F10", command=self.maximize_chromatogram)
+        self.view_menu.add_command(label="Restore All Workspace Panels", command=self.restore_all_panels)
+        self.view_menu.add_separator()
+
+        self.view_menu.add_command(label="Keyboard Shortcuts & Remap...   PageDown/Up", command=self._open_shortcut_dialog)
+        self.view_menu.add_separator()
+
         self.chan_menu = tk.Menu(self.view_menu, tearoff=0)
         self.chan_menu.add_radiobutton(label="Both", variable=self.channel_view_var, value="both", command=self._on_channel_view_changed)
         self.chan_menu.add_radiobutton(label="FID Only", variable=self.channel_view_var, value="FID1A", command=self._on_channel_view_changed)
         self.chan_menu.add_radiobutton(label="TCD Only", variable=self.channel_view_var, value="TCD2B", command=self._on_channel_view_changed)
-        self.view_menu.add_cascade(label="Channel View", menu=self.chan_menu)
+        self.view_menu.add_cascade(label="Channel View Submenu", menu=self.chan_menu)
         self.view_menu.add_separator()
+
         self.view_menu.add_command(label="Toggle Dark/Light Theme", command=self._toggle_theme)
         self.view_menu.add_command(label="Save Current Zoom View as Preset...", command=self._save_custom_zoom_preset)
         self.view_menu.add_separator()
-        self.view_menu.add_command(label="Zoom Reaction Window (3.5 - 16.5 min)", command=lambda: self.chrom_canvas.zoom_active_region())
-        self.view_menu.add_command(label="Zoom Full Run (0 - 40 min)", command=lambda: self.chrom_canvas.zoom_full_range())
-        self.view_menu.add_command(label="Auto-Scale Visible Y Axes", command=lambda: self.chrom_canvas.autoscale_visible_y())
+        self.view_menu.add_command(label="Zoom Full Run (0 - 40 min)   Home", command=lambda: self.chrom_canvas.zoom_full_range())
+        self.view_menu.add_command(label="Auto-Scale Visible Y Axes   End", command=lambda: self.chrom_canvas.autoscale_visible_y())
         self.menubar.add_cascade(label="View", menu=self.view_menu)
 
         for m in (self.menubar, self.file_menu, self.int_menu, self.view_menu, self.chan_menu):
@@ -468,7 +476,24 @@ class OpenChromLabApp(tk.Tk):
             padx=6,
             pady=2,
         )
-        self.btn_menu_view.pack(side=tk.LEFT, padx=(1, 8))
+        self.btn_menu_view.pack(side=tk.LEFT, padx=1)
+
+        self.btn_shortcuts = tk.Button(
+            self.topbar_frame,
+            text="⌨ Shortcuts",
+            command=self._open_shortcut_dialog,
+            font=("Segoe UI", 9),
+            bg=self.theme.topbar_btn_bg,
+            fg=self.theme.topbar_btn_fg,
+            relief=tk.FLAT,
+            bd=0,
+            highlightthickness=1,
+            highlightbackground=top_btn_bd,
+            padx=8,
+            pady=2,
+            cursor="hand2",
+        )
+        self.btn_shortcuts.pack(side=tk.LEFT, padx=(1, 8))
 
         badge_bg = getattr(self.theme, "method_badge_bg", self.theme.topbar_btn_bg)
         badge_fg = getattr(self.theme, "method_badge_fg", "#FBBF24")
@@ -590,6 +615,7 @@ class OpenChromLabApp(tk.Tk):
         self.btn_copy_matrix.pack(side=tk.RIGHT, padx=4)
 
         self.topbar_buttons = [
+            self.btn_shortcuts,
             self.btn_open_seq,
             self.btn_method_editor,
             self.btn_import_method,
@@ -881,8 +907,17 @@ class OpenChromLabApp(tk.Tk):
         self.left_frame = ttk.Frame(self.outer_paned, width=310)
         self.outer_paned.add(self.left_frame, weight=0)
 
-        self.lbl_seq = tk.Label(
+        self.seq_hdr_frame = tk.Frame(
             self.left_frame,
+            bg=getattr(self.theme, "seq_header_bg", self.theme.subbar_bg),
+            bd=0,
+            highlightthickness=1,
+            highlightbackground=self.theme.panel_border,
+        )
+        self.seq_hdr_frame.pack(fill=tk.X)
+
+        self.lbl_seq = tk.Label(
+            self.seq_hdr_frame,
             text="Sequence Injections (.D)",
             font=("Segoe UI", 9, "bold"),
             bg=getattr(self.theme, "seq_header_bg", self.theme.subbar_bg),
@@ -890,11 +925,36 @@ class OpenChromLabApp(tk.Tk):
             anchor="w",
             padx=6,
             pady=4,
-            bd=0,
-            highlightthickness=1,
-            highlightbackground=self.theme.panel_border,
         )
-        self.lbl_seq.pack(fill=tk.X)
+        self.lbl_seq.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        self.btn_next_inj = tk.Button(
+            self.seq_hdr_frame,
+            text="▶",
+            font=("Segoe UI", 8, "bold"),
+            bg=getattr(self.theme, "seq_header_bg", self.theme.subbar_bg),
+            fg=getattr(self.theme, "seq_header_fg", self.theme.fg_app),
+            relief=tk.FLAT,
+            bd=0,
+            padx=6,
+            command=self.next_injection,
+            cursor="hand2",
+        )
+        self.btn_next_inj.pack(side=tk.RIGHT, padx=2)
+
+        self.btn_prev_inj = tk.Button(
+            self.seq_hdr_frame,
+            text="◀",
+            font=("Segoe UI", 8, "bold"),
+            bg=getattr(self.theme, "seq_header_bg", self.theme.subbar_bg),
+            fg=getattr(self.theme, "seq_header_fg", self.theme.fg_app),
+            relief=tk.FLAT,
+            bd=0,
+            padx=6,
+            command=self.prev_injection,
+            cursor="hand2",
+        )
+        self.btn_prev_inj.pack(side=tk.RIGHT, padx=2)
 
         tree_container = ttk.Frame(self.left_frame)
         tree_container.pack(fill=tk.BOTH, expand=True, pady=(2, 4))
@@ -923,11 +983,11 @@ class OpenChromLabApp(tk.Tk):
         self.outer_paned.add(self.right_paned, weight=1)
 
         # 2. Top-Right: Dual Stacked Chromatogram Viewer
-        chrom_frame = ttk.Frame(self.right_paned)
-        self.right_paned.add(chrom_frame, weight=3)
+        self.chrom_frame = ttk.Frame(self.right_paned)
+        self.right_paned.add(self.chrom_frame, weight=3)
 
         self.chrom_canvas = DualChromatogramCanvas(
-            chrom_frame,
+            self.chrom_frame,
             on_peak_selected=self._on_canvas_peak_selected,
             on_peaks_modified=self._on_canvas_peaks_modified,
         )
@@ -1010,10 +1070,10 @@ class OpenChromLabApp(tk.Tk):
             self.overlay_toggle_switches.append(sw)
 
         # 3. Bottom-Right: Notebook with 4 Tabs
-        bottom_frame = ttk.Frame(self.right_paned)
-        self.right_paned.add(bottom_frame, weight=2)
+        self.bottom_frame = ttk.Frame(self.right_paned)
+        self.right_paned.add(self.bottom_frame, weight=2)
 
-        self.notebook = ttk.Notebook(bottom_frame)
+        self.notebook = ttk.Notebook(self.bottom_frame)
         self.notebook.pack(fill=tk.BOTH, expand=True)
 
         self._build_tab_injection_peaks()
@@ -1390,6 +1450,47 @@ class OpenChromLabApp(tk.Tk):
                 values=(inj.injection_number, inj.sample_name or inj.short_label, src_badge),
             )
 
+    def _is_entry_focused(self) -> bool:
+        """Check if user is currently typing inside an Entry, Text, or Spinbox input."""
+        try:
+            focused = self.focus_get()
+            return isinstance(focused, (tk.Entry, ttk.Entry, tk.Text, tk.Spinbox))
+        except Exception:
+            return False
+
+    def select_injection(self, idx: int, reset_view: bool = False) -> None:
+        """Select injection by 0-based index and sync the left Treeview selection and scroll."""
+        if not (0 <= idx < len(self.injections)):
+            return
+        if str(idx) in self.inj_tree.get_children():
+            self.inj_tree.selection_set(str(idx))
+            self.inj_tree.see(str(idx))
+        self._select_injection_by_index(idx, reset_view=reset_view)
+
+    def next_injection(self, event: Optional[tk.Event] = None) -> Optional[str]:
+        """Navigate to the next injection while keeping the current chromatogram zoom bounds."""
+        if self._is_entry_focused() or not self.injections:
+            return None
+        cur_idx = self.injections.index(self.current_injection) if self.current_injection in self.injections else -1
+        next_idx = min(len(self.injections) - 1, cur_idx + 1)
+        if next_idx != cur_idx and next_idx >= 0:
+            self.select_injection(next_idx, reset_view=False)
+            inj_name = self.injections[next_idx].sample_name or self.injections[next_idx].short_label
+            self.status_var.set(f"Selected Injection #{next_idx+1}: {inj_name} (zoom view kept)")
+        return "break"
+
+    def prev_injection(self, event: Optional[tk.Event] = None) -> Optional[str]:
+        """Navigate to the previous injection while keeping the current chromatogram zoom bounds."""
+        if self._is_entry_focused() or not self.injections:
+            return None
+        cur_idx = self.injections.index(self.current_injection) if self.current_injection in self.injections else -1
+        prev_idx = max(0, cur_idx - 1)
+        if prev_idx != cur_idx and prev_idx < len(self.injections):
+            self.select_injection(prev_idx, reset_view=False)
+            inj_name = self.injections[prev_idx].sample_name or self.injections[prev_idx].short_label
+            self.status_var.set(f"Selected Injection #{prev_idx+1}: {inj_name} (zoom view kept)")
+        return "break"
+
     def _select_injection_by_index(self, idx: int, reset_view: bool = False) -> None:
         if not (0 <= idx < len(self.injections)):
             return
@@ -1397,6 +1498,119 @@ class OpenChromLabApp(tk.Tk):
         self.chrom_canvas.set_data(self.current_injection, self.method, reset_view=reset_view)
         self._refresh_peak_table()
         self._refresh_compound_table()
+
+    # ------------------------------------------------------------------
+    # Modular Workspace Panel Toggles (Agilent CDS View Options)
+    # ------------------------------------------------------------------
+
+    def _toggle_seq_panel(self) -> None:
+        """Show or hide the left sequence injections panel."""
+        if self.show_seq_panel_var.get():
+            try:
+                self.outer_paned.insert(0, self.left_frame, weight=0)
+            except Exception:
+                pass
+        else:
+            try:
+                self.outer_paned.forget(self.left_frame)
+            except Exception:
+                pass
+
+    def _toggle_overlays_panel(self) -> None:
+        """Show or hide the bottom-left Plot Overlays & Options card."""
+        if self.show_overlays_panel_var.get():
+            try:
+                self.ov_frame.pack(fill=tk.X, pady=2)
+            except Exception:
+                pass
+        else:
+            try:
+                self.ov_frame.pack_forget()
+            except Exception:
+                pass
+
+    def _toggle_bottom_tables(self) -> None:
+        """Show or hide the bottom data tables / peaks notebook."""
+        if self.show_bottom_tables_var.get():
+            try:
+                self.right_paned.add(self.bottom_frame, weight=2)
+            except Exception:
+                pass
+        else:
+            try:
+                self.right_paned.forget(self.bottom_frame)
+            except Exception:
+                pass
+
+    def maximize_chromatogram(self) -> None:
+        """Maximize the chromatogram view by hiding left and bottom panels."""
+        self.show_seq_panel_var.set(False)
+        self.show_bottom_tables_var.set(False)
+        self._toggle_seq_panel()
+        self._toggle_bottom_tables()
+        self.status_var.set("Maximized Chromatogram View (F10 to toggle).")
+
+    def restore_all_panels(self) -> None:
+        """Restore all workspace panels (sequence tree, overlays card, and data tables)."""
+        self.show_seq_panel_var.set(True)
+        self.show_overlays_panel_var.set(True)
+        self.show_bottom_tables_var.set(True)
+        self._toggle_seq_panel()
+        self._toggle_overlays_panel()
+        self._toggle_bottom_tables()
+        self.status_var.set("Restored all workspace panels.")
+
+    def _toggle_maximize(self, event: Optional[tk.Event] = None) -> Optional[str]:
+        """Toggle between maximized chromatogram view and normal restored workspace."""
+        if not self.show_seq_panel_var.get() and not self.show_bottom_tables_var.get():
+            self.restore_all_panels()
+        else:
+            self.maximize_chromatogram()
+        return "break"
+
+    # ------------------------------------------------------------------
+    # Keyboard Shortcuts & Remapping Engine
+    # ------------------------------------------------------------------
+
+    def _open_shortcut_dialog(self) -> None:
+        """Open the shortcut settings and key remapping dialog."""
+        ShortcutSettingsDialog(self, theme=self.theme, on_shortcuts_updated=self._apply_shortcuts)
+
+    def _apply_shortcuts(self) -> None:
+        """Load shortcuts from JSON config and bind actions to the main window."""
+        shortcuts = load_shortcuts()
+        action_map: Dict[str, Any] = {
+            "next_injection": self.next_injection,
+            "prev_injection": self.prev_injection,
+            "export_excel": lambda e: self._export_excel_dialog(),
+            "save_manual": lambda e: self._save_current_manual_overrides(),
+            "undo": self._on_undo_triggered,
+            "delete_peak": lambda e: self._delete_selected_peak(),
+            "toggle_maximize": self._toggle_maximize,
+            "zoom_full": lambda e: self.chrom_canvas.zoom_full_range(),
+            "autoscale_y": lambda e: self.chrom_canvas.autoscale_visible_y(),
+            "escape": self._on_escape_triggered,
+        }
+
+        # Clear previously registered dynamic keys
+        if hasattr(self, "_bound_keys"):
+            for k in self._bound_keys:
+                try:
+                    self.unbind(k)
+                except Exception:
+                    pass
+        self._bound_keys = []
+
+        for act_id, info in shortcuts.items():
+            handler = action_map.get(act_id)
+            if not handler:
+                continue
+            for key in info.get("keys", []):
+                try:
+                    self.bind(key, handler)
+                    self._bound_keys.append(key)
+                except Exception:
+                    pass
 
     # ------------------------------------------------------------------
     # Table Refresh Methods
@@ -1734,6 +1948,8 @@ class OpenChromLabApp(tk.Tk):
         dlg.minsize(380, 320)
         dlg.resizable(True, True)
         dlg.configure(bg=self.theme.bg_frame)
+        ico_path = os.path.join(self.workspace_dir, "OpenChromLab.ico")
+        apply_windows_dark_titlebar(dlg, ico_path)
         dlg.transient(self)
         dlg.grab_set()
 
@@ -1837,6 +2053,8 @@ class OpenChromLabApp(tk.Tk):
 
         dlg = tk.Toplevel(self)
         dlg.title(f"{'Add' if is_new else 'Edit'} Timed Integration Event — {sname}")
+        ico_path = os.path.join(self.workspace_dir, "OpenChromLab.ico")
+        apply_windows_dark_titlebar(dlg, ico_path)
         dlg.transient(self)
         dlg.grab_set()
         dlg.resizable(False, False)
@@ -2177,11 +2395,25 @@ class OpenChromLabApp(tk.Tk):
         self._refresh_segmented_button_styles()
 
         # 3. Left Sidebar Sequence Header & Plot Overlays Card + Pill Toggle Switches (F9)
+        if hasattr(self, "seq_hdr_frame"):
+            self.seq_hdr_frame.configure(
+                bg=getattr(palette, "seq_header_bg", palette.subbar_bg),
+                highlightbackground=palette.panel_border,
+            )
         if hasattr(self, "lbl_seq"):
             self.lbl_seq.configure(
                 bg=getattr(palette, "seq_header_bg", palette.subbar_bg),
                 fg=getattr(palette, "seq_header_fg", palette.fg_app),
-                highlightbackground=palette.panel_border,
+            )
+        if hasattr(self, "btn_prev_inj"):
+            self.btn_prev_inj.configure(
+                bg=getattr(palette, "seq_header_bg", palette.subbar_bg),
+                fg=getattr(palette, "seq_header_fg", palette.fg_app),
+            )
+        if hasattr(self, "btn_next_inj"):
+            self.btn_next_inj.configure(
+                bg=getattr(palette, "seq_header_bg", palette.subbar_bg),
+                fg=getattr(palette, "seq_header_fg", palette.fg_app),
             )
         card_bg = getattr(palette, "overlay_card_bg", palette.bg_frame)
         card_bd = getattr(palette, "overlay_card_border", palette.panel_border)
@@ -2504,9 +2736,19 @@ class OpenChromLabApp(tk.Tk):
         else:
             self.method.custom_zoom_presets.append(new_preset)
 
-        if self.method.source_path and os.path.exists(os.path.dirname(os.path.abspath(self.method.source_path))):
+        # Persist to method file if saved as JSON, or save into workspace
+        if self.method.source_path and self.method.source_path.lower().endswith(".json"):
             try:
                 self.method.save_json(self.method.source_path)
+            except Exception:
+                pass
+        else:
+            target_dir = self.workspace_dir or os.getcwd()
+            safe_name = "".join(c for c in self.method.name if c.isalnum() or c in (" ", "_", "-")).strip() or "method"
+            save_path = os.path.join(target_dir, f"{safe_name}.json")
+            try:
+                self.method.save_json(save_path)
+                self.method.source_path = save_path
             except Exception:
                 pass
 
@@ -2515,15 +2757,10 @@ class OpenChromLabApp(tk.Tk):
             if name in val:
                 self.zoom_combo.set(val)
                 break
-        self.status_var.set(f"Saved custom zoom preset '{name}' [{x0:.2f}–{x1:.2f} min] to method.")
+        self.status_var.set(f"Saved custom zoom preset '{name}' [{x0:.2f}–{x1:.2f} min] to method '{self.method.name}'.")
 
     def _refresh_zoom_presets(self) -> None:
         self.zoom_presets = {
-            "Reaction (3.5–16.5m)": lambda: self.chrom_canvas.zoom_active_region(),
-            "C1–C3 + DME (4.4–6.5m)": lambda: self._zoom_preset(4.4, 6.5, (9.4, 19.0), (35.0, 220.0)),
-            "MeOH + C4 (6.6–8.6m)": lambda: self._zoom_preset(6.6, 8.6, (9.5, 16.0), (20.0, 120.0)),
-            "H2 + Ar (8.0–9.3m)": lambda: self._zoom_preset(8.0, 9.3, (9.7, 11.0), (10.0, 160.0)),
-            "CO (13.0–14.3m)": lambda: self._zoom_preset(13.0, 14.3, (9.8, 12.0), (30.0, 310.0)),
             "Full (0–40m)": lambda: self.chrom_canvas.zoom_full_range(),
             "Auto-Y": lambda: self.chrom_canvas.autoscale_visible_y(),
         }

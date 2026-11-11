@@ -320,10 +320,19 @@ def build_default_mpz_method() -> ProcessingMethod:
         CompoundDef(16, "CH3CH2CH2OH", "FID1A", 15.380, 0.700, 1.000),
     ]
 
+    mpz_zoom_presets = [
+        ZoomPresetDef("Reaction (3.5–16.5m)", 3.5, 16.5, {"FID1A": (9.0, 25.0), "TCD2B": (20.0, 320.0)}),
+        ZoomPresetDef("C1–C3 + DME (4.4–6.5m)", 4.4, 6.5, {"FID1A": (9.4, 19.0), "TCD2B": (35.0, 220.0)}),
+        ZoomPresetDef("MeOH + C4 (6.6–8.6m)", 6.6, 8.6, {"FID1A": (9.5, 16.0), "TCD2B": (20.0, 120.0)}),
+        ZoomPresetDef("H2 + Ar (8.0–9.3m)", 8.0, 9.3, {"FID1A": (9.7, 11.0), "TCD2B": (10.0, 160.0)}),
+        ZoomPresetDef("CO (13.0–14.3m)", 13.0, 14.3, {"FID1A": (9.8, 12.0), "TCD2B": (30.0, 310.0)}),
+    ]
+
     return ProcessingMethod(
         name="MPZ_method-2.2",
         signals={"FID1A": fid1a, "TCD2B": tcd2b},
         compounds=compounds,
+        custom_zoom_presets=mpz_zoom_presets,
     )
 
 
