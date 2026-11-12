@@ -1,12 +1,41 @@
-# OpenChromLab
+# <img src="agilent_ui/logo.png" width="42" height="42" align="center" alt="OpenChromLab Logo" /> OpenChromLab
 
-[![Version](https://img.shields.io/badge/version-1.1.0-orange.svg)]()
-[![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/piezoperny/OpenChromLab?color=blue&label=release)](https://github.com/piezoperny/OpenChromLab/releases)
+[![Version](https://img.shields.io/badge/version-1.1.0--beta-orange.svg)]()
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-lightgrey.svg)]()
-[![Status](https://img.shields.io/badge/tests-133%2F133%20passing-brightgreen.svg)]()
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Status](https://img.shields.io/badge/tests-134%2F134%20passing-brightgreen.svg)]()
 
 > **A high-performance, open-source Windows desktop substitute for Agilent OpenLab CDS Data Analysis (v2.7)** tailored for heterogeneous catalysis and reaction gas chromatography workflows (dual-channel FID1A + TCD2B).
+
+---
+
+## 📥 Download & Releases
+
+| Download | Description | Requirements |
+| :--- | :--- | :--- |
+| 🚀 [**Download OpenChromLab.exe (v1.1.0-beta)**](https://github.com/piezoperny/OpenChromLab/releases/latest) | **Standalone Single-File Executable**: Download, double-click, and run immediately. | **Zero dependencies**, no Python required. |
+| 📦 [**Download Clean Source Code (.zip)**](https://github.com/piezoperny/OpenChromLab/archive/refs/heads/release.zip) | Minimal ~1.2 MB clean package without test dataset, ready for deployment. | Windows 10/11 |
+
+---
+
+## 🚀 Quick Start & Launching
+
+You can run OpenChromLab using any of the following methods:
+
+1. **Standalone Executable (Recommended for most users):**
+   * Download [`OpenChromLab.exe`](https://github.com/piezoperny/OpenChromLab/releases/latest) from the [Releases page](https://github.com/piezoperny/OpenChromLab/releases).
+   * Double-click `OpenChromLab.exe` — runs instantly with no setup or admin rights.
+2. **Desktop Shortcut:**
+   * Double-click [`OpenChromLab.lnk`](file:///home/antigravity/piezoperny/OpenChromLab/OpenChromLab.lnk) (custom high-resolution squircle icon).
+3. **Double-Click Batch Launcher:**
+   * Double-click [`OpenChromLab.bat`](file:///home/antigravity/piezoperny/OpenChromLab/OpenChromLab.bat) (runs cleanly without a black console window, with automatic zero-admin runtime resilience).
+4. **Python Source:**
+   ```bash
+   python main.py
+   # To bypass the 2-second splash screen during testing:
+   python main.py --no-splash
+   ```
 
 ---
 
@@ -32,26 +61,6 @@
   - Automatic per-injection persistence to `openlab_sub_manual.json`.
 - **Method-Tied Zoom Presets**: Custom zoom presets are saved directly inside the analytical method `.json`, so switching reactions automatically loads that reaction's specific retention time windows.
 - **Single-Sheet Consolidated Excel Exporter**: Batch exports all sequence runs into a single `Compound_vs_Injections` matrix sheet with dynamic `=SUM()` formulas ready for instant charting in Excel.
-
----
-
-## 🚀 Quick Start
-
-### 1. Requirements & Portability
-* **Windows 10 or 11 (64-bit)**
-* **Zero administrator privileges required**: OpenChromLab is 100% portable and self-contained.
-* **Auto-Contained Python**: If Python is already installed, OpenChromLab runs immediately using standard library modules. If Python is not detected on a lab computer, double-clicking [`OpenChromLab.bat`](file:///home/antigravity/piezoperny/OpenChromLab/OpenChromLab.bat) automatically sets up an isolated, portable user-space runtime with no admin prompts.
-
-### 2. Launching OpenChromLab
-You can launch the program in any of the following ways:
-
-* **Desktop Shortcut**: Double-click [`OpenChromLab.lnk`](file:///home/antigravity/piezoperny/OpenChromLab/OpenChromLab.lnk) (custom high-resolution squircle icon).
-* **Double-Click Batch Launcher**: Double-click [`OpenChromLab.bat`](file:///home/antigravity/piezoperny/OpenChromLab/OpenChromLab.bat) (runs cleanly with `pythonw`/`pyw` without a console window).
-* **Command line**:
-  ```bash
-  python main.py
-  ```
-  *(To bypass the 2-second splash screen: `python main.py --no-splash`)*
 
 ---
 
