@@ -38,3 +38,14 @@ jobs:
           name: OpenChromLab-Windows-x64
           path: dist/OpenChromLab.exe
           if-no-files-found: error
+
+      - name: Create GitHub Release with Standalone Exe
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/OpenChromLab.exe
+          name: OpenChromLab ${{ github.ref_name }} (Beta)
+          draft: false
+          prerelease: true
+          generate_release_notes: true
+
